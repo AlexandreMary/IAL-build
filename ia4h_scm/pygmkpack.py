@@ -247,12 +247,15 @@ class Pack(object):
         in a given **directory**.
         """
         directory_abspath = os.path.abspath(directory)
+        symlinks = {}
+        if six.PY3:
+            symlinks['follow_symlinks'] = True
         with self._cd_local():
             for f in list_of_files:
                 dirpath = os.path.dirname(os.path.abspath(f))
                 if not os.path.exists(dirpath):
                     os.makedirs(dirpath)
-                shutil.copyfile(os.path.join(directory_abspath, f), f)
+                shutil.copyfile(os.path.join(directory_abspath, f), f, **symlinks)
     
     def populate_from_IA4H_branch(self, branch):
         """
@@ -308,6 +311,7 @@ class Pack(object):
     
     # Executables --------------------------------------------------------------
     
+    @property
     def available_executables(self):
         """Lists the available executables."""
         return sorted(os.listdir(self._bin))

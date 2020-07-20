@@ -78,6 +78,18 @@ class GitProxy(object):
         """List of remote branches. All remotes if only_remote==''."""
         remote_branches = [b for b in self.branches if '/' in b]
         return [b for b in remote_branches if b.startswith(only_remote)]
+
+    def current_branch_is_tracking(self, only_remote=''):
+        """Return remote-tracking branch of the current branch, if existing."""
+        git_cmd = ['git', 'status', '-b', '--porcelain']
+        out = self._git_cmd(git_cmd)[0].split('...')
+        if len(out) > 1:
+            remote_branch = out[1]
+            if not remote_branch.startswith(only_remote):
+                remote_branch = None
+        else:
+            remote_branch = None
+        return remote_branch
     
     def checkout_new_branch(self, branch, start_ref=None):
         """Create and checkout new branch, from current ref or **start_ref**."""
@@ -230,7 +242,8 @@ class IA4H_Branch(object):
             assert self.git_proxy.is_clean, \
                 "Working directory is not clean. Reset or commit changes manually."
             self.git_proxy.ref_checkout(self.name)
-        self.git_proxy.pull(remote=remote)
+        if self.git_proxy.current_branch_is_tracking(only_remote=remote) is not None:
+            self.git_proxy.pull(remote=remote)
     
     def __del__(self):
         if self.git_proxy.current_branch == self.name:
