@@ -106,9 +106,7 @@ class GitProxy(object):
                 ref = 'tag:'
             else:
                 ref = 'branch:'
-            ref += '/'.join(r.split('/')[2:])  # tags and branches : refs/tags/... or refs/heads/... or refs/remotes/...
-                ref = 'branch:'
-            ref += '/'.join(r.split('/')[2:])  # tags and branches : refs/tags/... or refs/heads/... or refs/remotes/...
+            ref += '/'.join(r.split('/')[2:])  # tags and branches : refs/tags/... or refs/heads/... or refs/remotes/...        
             refs[ref] = h
         return refs
 
@@ -198,6 +196,9 @@ class GitProxy(object):
             if line[0] in ('A', 'M', 'T', 'D'):
                 asdict[line[0]].add(line.split()[1])
             elif line[0] in ('C', 'R'):
+                asdict[line[0]].add(tuple(line.split()[1:3]))
+            else:
+                asdict[line[0]].add(line)  # FIXME: don't know how to interpret this
         for k in list(asdict.keys()):
             if len(asdict[k]) == 0:
                 asdict.pop(k)

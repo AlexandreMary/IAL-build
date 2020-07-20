@@ -15,7 +15,26 @@ from .pygmkpack import (Pack, PackError,
 # TODO: handle multiple repositories/projects to pack
 
 
-def branch2pack(repository, branch, preexisting_pack=False, rootpacks_dir=GCO_ROOTPACK,
+def branch2binaries(repository, branch,
+                    programs=USUAL_BINARIES,
+                    preexisting_pack=False,
+                    rootpacks_dir=GCO_ROOTPACK,
+                    other_pack_options={},
+                    silent=False):
+    """From branch(es) to pack."""
+    pack = branch2pack(repository, branch,
+                       preexisting_pack=preexisting_pack,
+                       rootpacks_dir=rootpacks_dir,
+                       other_pack_options=other_pack_options,
+                       silent=silent)
+    pack_build_executables(pack, programs,
+                           silent=silent,
+                           other_pack_options=other_pack_options)
+
+
+def branch2pack(repository, branch,
+                preexisting_pack=False,
+                rootpacks_dir=GCO_ROOTPACK,
                 other_pack_options=None,
                 silent=False):
     """From branch(es) to pack."""
@@ -36,7 +55,10 @@ def branch2pack(repository, branch, preexisting_pack=False, rootpacks_dir=GCO_RO
     return pack
 
 
-def pack_build_executables(pack, programs=USUAL_BINARIES, silent=False, other_pack_options={}):
+def pack_build_executables(pack,
+                           programs=USUAL_BINARIES,
+                           silent=False,
+                           other_pack_options={}):
     """Build pack executables."""
     if isinstance(pack, six.string_types):
         packpack = Pack(packname, preexisting=True)

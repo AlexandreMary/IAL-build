@@ -1,2 +1,7 @@
 *.pyc
+
 deploy.sh
+
+.settings
+.project
+.pydevproject

@@ -58,7 +58,7 @@ def new_incremental_pack(packname,
                          initial_branch=None,
                          initial_branch_version=None,
                          from_root=None,
-                         other_pack_options=None,
+                         other_pack_options={},
                          silent=False):
     """
     Create a new incremental pack.
@@ -86,9 +86,8 @@ def new_incremental_pack(packname,
     if from_root == GCO_ROOTPACK:
         args['-g'] = 'cy'
         args['-e'] = '.pack'
-    if other_pack_options is not None:
-        assert isinstance(other_pack_options, dict)
-        args.update(other_pack_options)
+    assert isinstance(other_pack_options, dict)
+    args.update(other_pack_options)
     gmkpack_cmd(args, silent=silent)
     return pack
 
@@ -324,8 +323,8 @@ class Pack(object):
         """Run interactively the ics_ compilation script for **program**"""
         assert os.path.exists(self.ics_path_for(program))
         if silent:
-            outname = self.ics_path_for(program).replace('ics_', now().stdvortex) + '.out'
-            with stdout_redirected(to=outname)
+            outname = self.ics_path_for(program).replace('ics_', now().stdvortex + '.') + '.out'
+            with stdout_redirected(to=outname):
                 with stderr_redirected(to=outname):
                     _ = subprocess.check_call(self.ics_path_for(program))
         else:
