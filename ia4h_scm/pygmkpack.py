@@ -58,6 +58,7 @@ def new_incremental_pack(packname,
                          initial_branch=None,
                          initial_branch_version=None,
                          from_root=None,
+                         homepack=None,
                          other_pack_options={},
                          silent=False):
     """
@@ -68,11 +69,12 @@ def new_incremental_pack(packname,
     :param initial_branch: branch on release to start from
     :param initial_branch_version: version number on the branch to start from
     :param from_root: where to look for pack to start from (option -f of gmkpack)
+    :param homepack: home directory for packs
     :param other_pack_options: arguments to the command-line to be passed as a dict,
         e.g. {'-l':'IMPIFC1801'}
     :param silent: to mute gmkpack
     """
-    pack = Pack(packname, preexisting=False)
+    pack = Pack(packname, preexisting=False, homepack=homepack)
     if os.path.exists(pack.abspath):
         raise PackError('Pack already exists, cannot create: {}'.format(pack.abspath))
     args = {'-r':initial_release.lower().replace('cy', ''),
@@ -86,6 +88,7 @@ def new_incremental_pack(packname,
     if from_root == GCO_ROOTPACK:
         args['-g'] = 'cy'
         args['-e'] = '.pack'
+    args.update({'-h':pack.homepack})
     assert isinstance(other_pack_options, dict)
     args.update(other_pack_options)
     gmkpack_cmd(args, silent=silent)
@@ -107,14 +110,15 @@ def copy_files_in_cwd(list_of_files, originary_directory_abspath):
 
 class Pack(object):
 
-    homepack = os.environ.get('HOMEPACK',
-                              os.path.join(os.environ.get('HOME'), 'pack'))
-
-    def __init__(self, packname, preexisting=True):
+    def __init__(self, packname, preexisting=True, homepack=None):
         """
         Create Pack object from the **packname**.
         """
         self.packname = packname
+        if homepack is None:
+            homepack = os.environ.get('HOMEPACK',
+                                      os.path.join(os.environ.get('HOME'), 'pack'))
+        self.homepack = homepack
         self.abspath = os.path.join(self.homepack, packname)
         self._local = os.path.join(self.abspath, 'src', 'local')
         self._bin = os.path.join(self.abspath, 'bin')
@@ -159,7 +163,7 @@ class Pack(object):
         options = self.options
         tag = self.release
         if options['-b'] != 'main':
-            tag += options['-b'] + options['-v']
+            tag += '_{}.{}'.format(options['-b'], options['-v'])
         return tag
     
     # Methods around *ics_* compilation scripts --------------------------------
@@ -176,6 +180,7 @@ class Pack(object):
         args.update({'-p':program.lower()})
         if os.path.exists(self.ics_path_for(program)):
             os.remove(self.ics_path_for(program))
+        args.update({'-h':self.homepack})
         gmkpack_cmd(args, silent=silent)
         pattern = 'export GMK_THREADS=(\d+)'
         self._ics_modify(program,
@@ -287,6 +292,8 @@ class Pack(object):
         assert isinstance(branch, IA4H_Branch)
         self._assert_IA4H_Branch_compatibility(branch)
         touched_files = branch.touched_files_since_latest_official_tagged_ancestor
+        if len(branch.git_proxy.touched_since_last_commit) > 0:
+            print("! Note:  non-committed files in the branch are exported to the pack.")
         # files to be copied
         files_to_copy = []
         for k in ('A', 'M', 'T'):
@@ -334,7 +341,7 @@ class Pack(object):
                             files_to_ignore=None,
                             branchname=None,
                             preexisting_branch=False,
-                            commit=False,
+                            commit_message=None,
                             push=False,
                             remote=None):
         """
@@ -345,17 +352,22 @@ class Pack(object):
         :param branchname: if None, generated from pack options as:
             <logname>_<release>_<packname>
         :param preexisting_branch: whether the branch already exists in the repository
-        :param commit: to commit the modifications after populating the branch
+        :param commit_message: if not None, activate committing the modifications
+            after populating the branch with given commit message
         :param push: to push the branch to remote repository after committing
         :param remote: remote repository to be pushed to
         """
         from .repositories import IA4H_Branch
         if branchname is None:
-            branchname = '_'.join([os.getlogin(), self.release, self.options['-u']])
+            _re_branch = re.compile('{}_{}_(.+)'.format(os.getlogin(), self.release))
+            if _re_branch.match(self.packname):
+                branchname = self.packname
+            else:
+                branchname = '_'.join([os.getlogin(), self.release, self.packname])
         if preexisting_branch:
-            branch = IA4H_Branch(repository, branch)
+            branch = IA4H_Branch(repository, branchname)
         else:
-            branch = IA4H_Branch(repository, branch,
+            branch = IA4H_Branch(repository, branchname,
                                  new_branch=True,
                                  start_ref=self.tag_of_latest_official_ancestor)
         touched_files = self.scanpack()
@@ -364,17 +376,20 @@ class Pack(object):
                 files_to_ignore = [file.strip() for file in f.readlines()]
         with branch.git_proxy.cd_repo():
             copy_files_in_cwd(touched_files, self._local)
-            if files_to_ignore is not None:
-                assert isinstance(files_to_ignore, list)
-                for f in files_to_ignore:
-                    branch.git_proxy.delete_file(f)
-            if commit:
-                branch.git_proxy.commit(add=True)
-                if push:
-                    branch.push(remote=remote)
-            else:
-                if push:
-                    print("**commit**==False => **push** argument ignored.")
+        if files_to_ignore is not None:
+            assert isinstance(files_to_ignore, list)
+            for f in files_to_ignore:
+                branch.git_proxy.delete_file(f)
+        print("=> Pack: {} saved as branch: {} in repository: {}".format(
+            self.packname, branch.name, repository))
+        if commit_message is not None:
+            branch.git_proxy.stage(touched_files)
+            branch.git_proxy.commit(commit_message)
+            #print("Committed: {}".format(commit))
+            if push:
+                branch.push(remote=remote)
+                print("Pushed.")
+        return branch
         
     # Executables --------------------------------------------------------------
     

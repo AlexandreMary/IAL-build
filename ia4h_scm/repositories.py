@@ -4,6 +4,7 @@ from __future__ import print_function, absolute_import, unicode_literals, divisi
 """
 Management of repositories.
 """
+import six
 import subprocess
 import os
 import re
@@ -48,6 +49,7 @@ class GitProxy(object):
             if ref is not None:
                 git_cmd.append(ref)
         self._git_cmd(git_cmd)
+        print("     ...ok")
     
     def push(self, remote=None):
         """Push current branch to **remote**."""
@@ -234,7 +236,44 @@ class GitProxy(object):
             if len(asdict[k]) == 0:
                 asdict.pop(k)
         return asdict
+
+    @property
+    def touched_since_last_commit(self):
+        """
+        Return the lists of Added, Modified, Deleted, Renamed (etc...) files
+        since last commit.
+        """
+        git_cmd = ['git', 'status', '-s', '--porcelain']
+        touched = self._git_cmd(git_cmd)
+        asdict = {'A':set(), 'R':set(), 'M':set(), 'C':set(), 'T':set(),
+                  'D':set(),
+                  'U':set(), 'X':set(), 'B':set()}
+        for line in touched:
+            line = line.replace('??', 'A')
+            if line[0] in ('A', 'M', 'T', 'D'):
+                asdict[line[0]].add(line.split()[1])
+            elif line[0] in ('C', 'R'):
+                asdict[line[0]].add(tuple(line.split()[1::2]))  # file1 -> file2
+            else:
+                asdict[line[0]].add(line)  # FIXME: don't know how to interpret this
+        for k in list(asdict.keys()):
+            if len(asdict[k]) == 0:
+                asdict.pop(k)
+        return asdict
+
     
+    def stage(self, filenames):
+        """
+        Add file(s) to stage.
+
+        :param filenames: either a filename or a list of
+        """
+        if isinstance(filenames, six.string_types):
+            filenames = [filenames,]
+        for f in filenames:
+            git_cmd = ['git', 'add', f]
+            self._git_cmd(git_cmd)
+
     def delete_file(self, filename):
         """Delete a file from git."""
         git_cmd = ['git', 'rm', filename]
@@ -284,7 +323,9 @@ class IA4H_Branch(object):
             if self.git_proxy.is_clean:
                 self.git_proxy.ref_checkout(self.checkedout_branch_on_repo_before)
             else:
-                raise Warning("Working directory is not clean at time of quiting the branch. Reset or commit changes manually.")
+                if self.checkedout_branch_on_repo_before != self.name:
+                    print("! Working directory is not clean at time of quiting the branch. Reset or commit changes manually.")
+                    raise Warning("Unable to go back to previously checkedout branch: {}".format(self.checkedout_branch_on_repo_before))
         else:
             raise Warning("Checkedout branch has changed and is no more {}".format(self.name))
     
@@ -331,14 +372,21 @@ class IA4H_Branch(object):
     
     def touched_files_since(self, ref):
         """Lists touched files since **ref** (commit or tag)."""
-        return self.git_proxy.touched_between(ref, 'HEAD')
+        uncommitted = self.git_proxy.touched_since_last_commit
+        touched = self.git_proxy.touched_between(ref, 'HEAD')
+        for k in uncommitted.keys():
+            if k in touched:
+                touched[k].update(uncommitted[k])
+            else:
+                touched[k] = uncommitted[k]
+        return touched
     
     @property
     def touched_files_since_latest_tagged_ancestor(self):
         """Lists touched files since *self.latest_tagged_ancestor*."""
-        return self.git_proxy.touched_between(self.latest_tagged_ancestor, 'HEAD')
+        return self.touched_files_since(self.latest_tagged_ancestors)
     
     @property
     def touched_files_since_latest_official_tagged_ancestor(self):
         """Lists touched files since *self.latest_official_tagged_ancestors*."""
-        return self.git_proxy.touched_between(self.latest_official_tagged_ancestors, 'HEAD')
+        return self.touched_files_since(self.latest_official_tagged_ancestors)
