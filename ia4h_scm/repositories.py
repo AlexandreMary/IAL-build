@@ -22,7 +22,7 @@ class GitProxy(object):
             "There is no **repository** in here: {}".format(self.repository)
     
     @contextmanager
-    def _cd_repo(self):
+    def cd_repo(self):
         """Context: in self.repository"""
         owd = os.getcwd()
         try:
@@ -47,6 +47,13 @@ class GitProxy(object):
             git_cmd.append(remote)
             if ref is not None:
                 git_cmd.append(ref)
+        self._git_cmd(git_cmd)
+    
+    def push(self, remote=None):
+        """Push current branch to **remote**."""
+        git_cmd = ['git', 'push', self.current_branch]
+        if remote is not None:
+            git_cmd.extend(['-u', remote])
         self._git_cmd(git_cmd)
     
     @property
@@ -190,6 +197,18 @@ class GitProxy(object):
         except subprocess.CalledProcessError:
             return False
     
+    def commit(self, message, add=False):
+        """
+        Commit the staged modifications.
+        
+        :param message: commit message
+        :param add: add locally modified files to stage before committing
+        """
+        git_cmd = ['git', 'commit', '-m', message]
+        if add:
+            git_cmd.append('-a')
+        self._git_cmd(git_cmd)
+    
     # Content ------------------------------------------------------------------
     
     def touched_between(self, start_ref, end_ref):
@@ -216,6 +235,11 @@ class GitProxy(object):
                 asdict.pop(k)
         return asdict
     
+    def delete_file(self, filename):
+        """Delete a file from git."""
+        git_cmd = ['git', 'rm', filename]
+        self._git_cmd(git_cmd)
+    
     @property
     def is_clean(self):
         """
@@ -231,7 +255,8 @@ class IA4H_Branch(object):
     """Utilities around IA4H branches."""
     _re_official_tags = re.compile('(?P<r>CY\d{2}((T|R)\d)?)(_(?P<b>.+)\.(?P<v>\d+))?$')
     
-    def __init__(self, repository, branch_name, remote=None):
+    def __init__(self, repository, branch_name, remote=None, new_branch=False,
+                 start_ref=None):
         """Hold **branch** from **repository**, possibly fetching it from **remote**."""
         self.name = branch_name
         self.repository = repository
@@ -239,10 +264,19 @@ class IA4H_Branch(object):
         self.git_proxy.fetch(remote=remote, ref=self.name if remote is not None else None)
         self.checkedout_branch_on_repo_before = self.git_proxy.current_branch
         if self.git_proxy.current_branch != self.name:
+            # need to switch branch
             assert self.git_proxy.is_clean, \
                 "Working directory is not clean. Reset or commit changes manually."
-            self.git_proxy.ref_checkout(self.name)
+            if new_branch:
+                assert start_ref is not None
+                self.git_proxy.checkout_new_branch(self.name, start_ref)
+            else:
+                self.git_proxy.ref_checkout(self.name)
+        else:
+            # already on branch
+            assert not new_branch, "branch {} already exist (checkedout)".format(self.name)
         if self.git_proxy.current_branch_is_tracking(only_remote=remote) is not None:
+            # remote-tracking branch: update
             self.git_proxy.pull(remote=remote)
     
     def __del__(self):

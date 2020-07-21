@@ -92,6 +92,19 @@ def new_incremental_pack(packname,
     return pack
 
 
+def copy_files_in_cwd(list_of_files, originary_directory_abspath):
+    """Copy a bunch of files from an originary directory to the cwd."""
+    symlinks = {}
+    if six.PY3:
+        symlinks['follow_symlinks'] = True
+    for f in list_of_files:
+        dirpath = os.path.dirname(os.path.abspath(f))
+        if not os.path.exists(dirpath):
+            os.makedirs(dirpath)
+        shutil.copyfile(os.path.join(originary_directory_abspath, f), f,
+                        **symlinks)
+
+
 class Pack(object):
 
     homepack = os.environ.get('HOMEPACK',
@@ -134,6 +147,20 @@ class Pack(object):
         options = dict(zip(genesis[1::2], genesis[2::2]))
         options.pop('-p', None)
         return options
+    
+    @property
+    def release(self):
+        """Lastest ancestor main release to the pack."""
+        return 'CY' + self.options['-r'].upper().replace('CY', '')  # CY might be or not be here
+    
+    @property
+    def tag_of_latest_official_ancestor(self):
+        """Tag of latest official ancestor."""
+        options = self.options
+        tag = self.release
+        if options['-b'] != 'main':
+            tag += options['-b'] + options['-v']
+        return tag
     
     # Methods around *ics_* compilation scripts --------------------------------
     
@@ -243,19 +270,12 @@ class Pack(object):
     
     def populate_from_files_in_dir(self, list_of_files, directory):
         """
-        Populate the incremental pack from the **list_of_files**
-        in a given **directory**.
+        Populate the incremental pack with the **list_of_files**
+        from a given **directory**.
         """
         directory_abspath = os.path.abspath(directory)
-        symlinks = {}
-        if six.PY3:
-            symlinks['follow_symlinks'] = True
         with self._cd_local():
-            for f in list_of_files:
-                dirpath = os.path.dirname(os.path.abspath(f))
-                if not os.path.exists(dirpath):
-                    os.makedirs(dirpath)
-                shutil.copyfile(os.path.join(directory_abspath, f), f, **symlinks)
+            copy_files_in_cwd(list_of_files, directory_abspath)
     
     def populate_from_IA4H_branch(self, branch):
         """
@@ -286,19 +306,20 @@ class Pack(object):
     def _assert_IA4H_Branch_compatibility(self, branch):
         """Assert that branch and pack have the same original node (ancestor)."""
         branch_ancestor_info = branch.latest_official_branch_from_main_release
-        pack_release = 'CY' + self.options['-r'].upper().replace('CY', '')  # might be or not be here
+        options = self.options
+        pack_release = self.release
         assert branch_ancestor_info['r'] == pack_release, \
             "release: (branch)={} vs. (pack)={}".format(branch_ancestor_info['r'],
                                                         pack_release)
         if branch_ancestor_info['b'] is not None:
-            assert branch_ancestor_info['b'] == self.options['-b'], \
+            assert branch_ancestor_info['b'] == options['-b'], \
                 "official branch: (branch)={} vs. (pack)={}".format(branch_ancestor_info['b'],
-                                                                    self.options['-b'])
-            assert branch_ancestor_info['v'] == self.options['-v'], \
+                                                                    options['-b'])
+            assert branch_ancestor_info['v'] == options['-v'], \
                 "official branch version: (branch)={} vs. (pack)={}".format(branch_ancestor_info['v'],
-                                                                            self.options['-v'])
+                                                                            options['-v'])
         else:
-            assert self.options['-b'] == 'main'
+            assert options['-b'] == 'main'
     
     def ignore_files(self, list_of_files):
         """Write files to be ignored in a dedicated file."""
@@ -309,6 +330,52 @@ class Pack(object):
                 for l in list_of_files:
                     f.write(l + '\n')
     
+    def save_as_IA4H_Branch(self, repository,
+                            files_to_ignore=None,
+                            branchname=None,
+                            preexisting_branch=False,
+                            commit=False,
+                            push=False,
+                            remote=None):
+        """
+        Save the contents of the pack into an IA4H Branch.
+        
+        :param files_to_ignore: either the filename of a file containing
+            the list of files to ignore, or a list of filenames
+        :param branchname: if None, generated from pack options as:
+            <logname>_<release>_<packname>
+        :param preexisting_branch: whether the branch already exists in the repository
+        :param commit: to commit the modifications after populating the branch
+        :param push: to push the branch to remote repository after committing
+        :param remote: remote repository to be pushed to
+        """
+        from .repositories import IA4H_Branch
+        if branchname is None:
+            branchname = '_'.join([os.getlogin(), self.release, self.options['-u']])
+        if preexisting_branch:
+            branch = IA4H_Branch(repository, branch)
+        else:
+            branch = IA4H_Branch(repository, branch,
+                                 new_branch=True,
+                                 start_ref=self.tag_of_latest_official_ancestor)
+        touched_files = self.scanpack()
+        if isinstance(files_to_ignore, six.string_types):
+            with io.open(files_to_ignore, 'r') as f:
+                files_to_ignore = [file.strip() for file in f.readlines()]
+        with branch.git_proxy.cd_repo():
+            copy_files_in_cwd(touched_files, self._local)
+            if files_to_ignore is not None:
+                assert isinstance(files_to_ignore, list)
+                for f in files_to_ignore:
+                    branch.git_proxy.delete_file(f)
+            if commit:
+                branch.git_proxy.commit(add=True)
+                if push:
+                    branch.push(remote=remote)
+            else:
+                if push:
+                    print("**commit**==False => **push** argument ignored.")
+        
     # Executables --------------------------------------------------------------
     
     @property
