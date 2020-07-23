@@ -22,7 +22,7 @@ __all__ = []
 
 GCO_ROOTPACK = '/home/mf/dp/marp/martinezs/packs'
 USUAL_BINARIES = ['masterodb', 'bator',
-                  'prep', 'pgd',
+                  'pgd', 'prep',
                   'oovar', 'ootestvar',
                   'ioassign', 'lfitools']
 
@@ -45,9 +45,8 @@ def gmkpack_cmd(arguments,
         arguments_as_list.extend([k, v])
     command = ['gmkpack',] + arguments_as_list
     if silent:
-        with stdout_redirected(to='/dev/null'):
-            with stderr_redirected(to='/dev/null'):
-                r = subprocess.check_call(command)
+        with io.open(os.devnull, 'w') as devnull:
+            r = subprocess.check_call(command, stdout=devnull, stderr=devnull)
     else:
         r = subprocess.check_call(command)
     return r
@@ -74,6 +73,7 @@ def new_incremental_pack(packname,
         e.g. {'-l':'IMPIFC1801'}
     :param silent: to mute gmkpack
     """
+    # TODO: main packs (include ignored files for compil)
     pack = Pack(packname, preexisting=False, homepack=homepack)
     if os.path.exists(pack.abspath):
         raise PackError('Pack already exists, cannot create: {}'.format(pack.abspath))
@@ -93,6 +93,15 @@ def new_incremental_pack(packname,
     args.update(other_pack_options)
     gmkpack_cmd(args, silent=silent)
     return pack
+
+
+def get_homepack(homepack=None):
+    """Get a HOMEPACK directory, in argument, $HOMEPACK, or $HOME/pack."""
+    if not homepack:
+        homepack = os.environ.get('HOMEPACK')
+    if not homepack:
+        homepack = os.path.join(os.environ.get('HOME'), 'pack')
+    return homepack
 
 
 def copy_files_in_cwd(list_of_files, originary_directory_abspath):
@@ -115,17 +124,14 @@ class Pack(object):
         Create Pack object from the **packname**.
         """
         self.packname = packname
-        if homepack is None:
-            homepack = os.environ.get('HOMEPACK',
-                                      os.path.join(os.environ.get('HOME'), 'pack'))
-        self.homepack = homepack
+        self.homepack = get_homepack(homepack)
         self.abspath = os.path.join(self.homepack, packname)
         self._local = os.path.join(self.abspath, 'src', 'local')
         self._bin = os.path.join(self.abspath, 'bin')
         if not preexisting and os.path.exists(self.abspath):
-            raise PackError("Pack already exists, while *preexisting* is False.")
+            raise PackError("Pack already exists, while *preexisting* is False ({}).".format(self.abspath))
         if preexisting and not os.path.exists(self.abspath):
-            raise PackError("Pack is supposed to preexist, while it doesn't")
+            raise PackError("Pack is supposed to preexist, while it doesn't ({}).".format(self.abspath))
 
     @contextmanager
     def _cd_local(self):
@@ -171,6 +177,10 @@ class Pack(object):
     def ics_path_for(self, program):
         """Path of the compilation script for **program**."""
         return os.path.join(self.abspath, 'ics_' + program.lower())
+
+    def ics_available_for(self, program):
+        """Whether the compilation script exists for **program**."""
+        return os.path.exists(self.ics_path_for(program))
     
     def ics_build_for(self, program, silent=False,
                       GMK_THREADS=40,
@@ -336,7 +346,24 @@ class Pack(object):
             with io.open(self.ignored_files_filename, 'w') as f:  # a python list
                 for l in list_of_files:
                     f.write(l + '\n')
-    
+        if 'ics_' in self.ics_available:
+            self.ics_ignore_files('', self.ignored_files_filename)
+   
+    def _packname2branchname(self):
+        options = self.options
+        packname = self.packname
+        # prune reference compiler version and compiler options
+        suffix = '.{}.{}'.format(options['-l'], options['-o'])
+        if packname.endswith(suffix):
+            packname = packname.replace(suffix, '')
+        # try to identify user and release
+        _re_branch = re.compile('{}_{}_(.+)'.format(os.getlogin(), self.release))
+        if _re_branch.match(packname):
+            branchname = packname
+        else:
+            branchname = '_'.join([os.getlogin(), self.release, packname])
+        return branchname
+
     def save_as_IA4H_Branch(self, repository,
                             files_to_ignore=None,
                             branchname=None,
@@ -358,12 +385,9 @@ class Pack(object):
         :param remote: remote repository to be pushed to
         """
         from .repositories import IA4H_Branch
+        # TODO: if branch has not been created with GCO-Git toolbox, the push may fail ?
         if branchname is None:
-            _re_branch = re.compile('{}_{}_(.+)'.format(os.getlogin(), self.release))
-            if _re_branch.match(self.packname):
-                branchname = self.packname
-            else:
-                branchname = '_'.join([os.getlogin(), self.release, self.packname])
+            branchname = self._packname2branchname
         if preexisting_branch:
             branch = IA4H_Branch(repository, branchname)
         else:
@@ -405,17 +429,36 @@ class Pack(object):
     
     # Compilation --------------------------------------------------------------
     
-    def compile(self, program, silent=False):
+    def compile(self, program, silent=False, clean_before=False, fatal=True):
         """Run interactively the ics_ compilation script for **program**"""
         assert os.path.exists(self.ics_path_for(program))
-        if silent:
-            outname = self.ics_path_for(program).replace('ics_', now().stdvortex + '.') + '.out'
-            with stdout_redirected(to=outname):
-                with stderr_redirected(to=outname):
-                    _ = subprocess.check_call(self.ics_path_for(program))
+        cmd = [self.ics_path_for(program),]
+        if clean_before:
+            self.cleanpack()
+        try:
+            if silent:
+                logdir = os.path.join(self.abspath, 'log')
+                if not os.path.exists(logdir):
+                    os.makedirs(logdir)
+                outname = os.path.join(logdir,
+                                       '.'.join([program.lower(),
+                                                 now().stdvortex]))
+                with io.open(outname, 'w') as f:
+                    subprocess.check_call(cmd, stdout=f, stderr=f)
+            else:
+                outname = None
+                subprocess.check_call(cmd)
+        except Exception:
+            if fatal:
+                raise
         else:
-            _ = subprocess.check_call(self.ics_path_for(program))  # get output code with next version of gmkpack ?
-        return self.executable_ok(program)
+            if fatal and not self.executable_ok(program):
+                message = "Build of {} failed.".format(program)
+                if outname is not None:
+                    message += " Output: " + outname
+                raise PackError(message)
+        return {'OK':self.executable_ok(program),
+                'Output':outname}
     
     def compile_all_programs(self, silent=False):
         """Run interactively the ics_ compilation script for **program**"""
@@ -430,6 +473,7 @@ class Pack(object):
         Run in batch the ics_ compilation script for **program**, using
         **batch_scheduler**
         """
+        raise NotImplementedError("not yet")
         batch_scheduler.submit(self.ics_path_for(program))
     
     # Pack contents ------------------------------------------------------------

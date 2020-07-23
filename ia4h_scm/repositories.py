@@ -21,6 +21,7 @@ class GitProxy(object):
         self.repository = os.path.abspath(repository)
         assert os.path.exists(os.path.join(self.repository, '.git')), \
             "There is no **repository** in here: {}".format(self.repository)
+        print('using ' + self._git_cmd(['git', 'version'])[0])
     
     @contextmanager
     def cd_repo(self):
@@ -90,11 +91,11 @@ class GitProxy(object):
 
     def current_branch_is_tracking(self, only_remote=''):
         """Return remote-tracking branch of the current branch, if existing."""
-        git_cmd = ['git', 'status', '-b', '--porcelain']
-        out = self._git_cmd(git_cmd)[0].split('...')
-        if len(out) > 1:
-            remote_branch = out[1]
-            if not remote_branch.startswith(only_remote):
+        git_cmd = ['git', 'for-each-ref', "--format='%(upstream:short)'", '"$(git symbolic-ref -q HEAD)"']
+        remote_branch = self._git_cmd(git_cmd)
+        if len(remote_branch) > 0:
+            remote_branch = remote_branch[0]
+            if only_remote is not None and not remote_branch.startswith(only_remote + '/'):
                 remote_branch = None
         else:
             remote_branch = None
@@ -180,7 +181,7 @@ class GitProxy(object):
         """Get the list of tags between 2 references (commits, branches, tags)."""
         git_cmd = ['git', 'log', '{}...{}'.format(start_ref, end_ref),
                    '--decorate', '--simplify-by-decoration']
-        _re = re.compile('commit .+ \((tag: .+)\)$')
+        _re = re.compile('commit .+ \((.+)\)$')
         cmd_out = self._git_cmd(git_cmd)
         list_of_tagged_commits = [line for line in cmd_out if _re.match(line)]
         list_of_tags = [_re.match(line).group(1).split(', ') for line in list_of_tagged_commits]
@@ -305,7 +306,7 @@ class IA4H_Branch(object):
         if self.git_proxy.current_branch != self.name:
             # need to switch branch
             assert self.git_proxy.is_clean, \
-                "Working directory is not clean. Reset or commit changes manually."
+                    "Repository: {} : working directory is not clean. Reset or commit changes manually.".format(self.repository)
             if new_branch:
                 assert start_ref is not None
                 self.git_proxy.checkout_new_branch(self.name, start_ref)
@@ -369,7 +370,8 @@ class IA4H_Branch(object):
         return self._re_official_tags.match(latest_official_tagged_ancestor).groupdict()
     
     # Content ------------------------------------------------------------------
-    
+    # TODO: export full sources (main pack)
+
     def touched_files_since(self, ref):
         """Lists touched files since **ref** (commit or tag)."""
         uncommitted = self.git_proxy.touched_since_last_commit
