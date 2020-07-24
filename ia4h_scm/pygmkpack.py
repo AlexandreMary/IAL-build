@@ -183,7 +183,7 @@ class Pack(object):
         return os.path.exists(self.ics_path_for(program))
     
     def ics_build_for(self, program, silent=False,
-                      GMK_THREADS=40,
+                      GMK_THREADS=16,
                       Ofrt=2):
         """Build the 'ics_*' script for **program**."""
         args = self.options

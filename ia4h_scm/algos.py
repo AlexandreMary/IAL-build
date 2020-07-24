@@ -79,10 +79,6 @@ def pack_build_executables(pack,
         print("-" * 50)
         print("Build: {} ...".format(program))
         try:
-            print("need to generate ics_",
-                  not pack.ics_available_for(program),
-                  regenerate_ics,
-                  not pack.ics_available_for(program) or regenerate_ics)
             if not pack.ics_available_for(program) or regenerate_ics:
                 print("(Re-)generate ics_{} script ...".format(program.lower()))
                 pack.ics_build_for(program, **other_options)

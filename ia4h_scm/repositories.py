@@ -49,7 +49,8 @@ class GitProxy(object):
             git_cmd.append(remote)
             if ref is not None:
                 git_cmd.append(ref)
-        self._git_cmd(git_cmd)
+        for out in self._git_cmd(git_cmd):
+            print(out)
         print("     ...ok")
     
     def push(self, remote=None):
@@ -84,19 +85,23 @@ class GitProxy(object):
         """List of local branches."""
         return [b for b in self.branches if '/' not in b]
     
-    def remote_branches(self, only_remote=''):
+    def remote_branches(self, only_remote=None):
         """List of remote branches. All remotes if only_remote==''."""
         remote_branches = [b for b in self.branches if '/' in b]
-        return [b for b in remote_branches if b.startswith(only_remote)]
+        if only_remote not in (None, ''):
+            remote_branches = [b for b in remote_branches if b.startswith(only_remote)]
+        return remote_branches
 
-    def current_branch_is_tracking(self, only_remote=''):
+    def current_branch_is_tracking(self, only_remote=None):
         """Return remote-tracking branch of the current branch, if existing."""
-        git_cmd = ['git', 'for-each-ref', "--format='%(upstream:short)'", '"$(git symbolic-ref -q HEAD)"']
+        git_cmd = ['git', 'for-each-ref', "--format=%(upstream:short)",
+                   'refs/heads/' + self.current_branch]
         remote_branch = self._git_cmd(git_cmd)
         if len(remote_branch) > 0:
             remote_branch = remote_branch[0]
-            if only_remote is not None and not remote_branch.startswith(only_remote + '/'):
-                remote_branch = None
+            if only_remote not in (None, ''):
+                if not remote_branch.startswith(only_remote + '/'):
+                    remote_branch = None
         else:
             remote_branch = None
         return remote_branch
@@ -111,10 +116,13 @@ class GitProxy(object):
     
     def pull(self, remote=None):
         """Update the local branch from remote's version."""
-        git_cmd = ['git', 'pull']
+        print("Pull...")
+        git_cmd = ['git', 'pull', '--ff-only']
         if remote is not None:
             git_cmd.append(remote)
-        self._git_cmd(git_cmd)
+        for out in self._git_cmd(git_cmd):
+            print(out)
+        print("    ...ok")
     
     # Ref(s) -------------------------------------------------------------------
     
