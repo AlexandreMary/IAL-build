@@ -70,7 +70,10 @@ def pack_build_executables(pack,
     elif not isinstance(pack, Pack):
         raise PackError("**pack** argument must be a pack name or a Pack instance")
     if isinstance(programs, six.string_types):
-        programs = [p.strip() for p in programs.split(',')]
+        if programs == '__usual__':
+            programs = USUAL_BINARIES
+        else:
+            programs = [p.strip() for p in programs.split(',')]
     elif not isinstance(programs, list):
         raise TypeError("**programs** must be a string (e.g. 'MASTERODB,BATOR') or a list")
     build_report = {}
