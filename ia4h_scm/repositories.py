@@ -211,6 +211,12 @@ class GitProxy(object):
         if add:
             git_cmd.append('-a')
         self._git_cmd(git_cmd)
+
+    @property
+    def latest_commit(self):
+        """Latest commit in current history."""
+        git_cmd = ['git', 'rev-parse', 'HEAD']
+        return self._git_cmd(git_cmd)[0]
     
     # Content ------------------------------------------------------------------
     
@@ -261,7 +267,6 @@ class GitProxy(object):
             if len(asdict[k]) == 0:
                 asdict.pop(k)
         return asdict
-
     
     def stage(self, filenames):
         """
@@ -291,44 +296,75 @@ class GitProxy(object):
         return len(status) == 0
 
 
-class IA4H_Branch(object):
-    """Utilities around IA4H branches."""
+class IA4Hview(object):
+    """Utilities around IA4H repository."""
     _re_official_tags = re.compile('(?P<r>CY\d{2}((T|R)\d)?)(_(?P<b>.+)\.(?P<v>\d+))?$')
     
-    def __init__(self, repository, branch_name, remote=None, new_branch=False,
+    def __init__(self, repository, ref,
+                 remote=None,
+                 new_branch=False,
                  start_ref=None):
-        """Hold **branch** from **repository**, possibly fetching it from **remote**."""
-        self.name = branch_name
+        """
+        Hold **ref** from **repository**.
+
+        :param remote: fetch/pull ref from a remote
+        :param new_branch: if the **ref** is a new branch to be created
+        :param start_ref: start reference, in case a new branch to be created
+        """
         self.repository = repository
-        self.git_proxy = GitProxy(repository)
-        self.git_proxy.fetch(remote=remote, ref=self.name if remote is not None else None)
-        self.checkedout_branch_on_repo_before = self.git_proxy.current_branch
-        if self.git_proxy.current_branch != self.name:
+        self.git_proxy = GitProxy(self.repository)
+        self.git_proxy.fetch(remote=remote,
+                             ref=ref if remote is not None else None)
+        # initial state (to get back at the end)
+        current_branch = self.git_proxy.current_branch
+        if current_branch == '(no branch)':  # detached HEAD state
+            self.initial_checkedout = self.git_proxy.latest_commit
+        else:
+            self.initial_checkedout = self.git_proxy.current_branch
+        # need to switch
+        if self.git_proxy.ref_exists(ref):
+            assert not new_branch, "ref: {} already exists, while **new_branch** is True.".format(ref)
+            if self.git_proxy.ref_is_branch(ref):
+                need_for_checkout = (self.initial_checkedout != ref)
+            elif self.git_proxy.ref_is_tag(ref):
+                if self.git_proxy.tag_points_to(ref) == self.git_proxy.latest_commit and self.git_proxy.is_clean:
+                    need_for_checkout = False
+                else:
+                    need_for_checkout = True
+            elif ref == 'HEAD':
+                need_for_checkout = False
+            else:  # regular commit
+                if self.git_proxy.latest_commit == ref:
+                    need_for_checkout = False
+                else:
+                    need_for_checkout = True
+        else:
+            assert new_branch, "ref:'{}' does not exist; cannot checkout unless **new_branch**.".format(ref)
+            need_for_checkout = True
+        # actual checkout if needed
+        if need_for_checkout:
             # need to switch branch
             assert self.git_proxy.is_clean, \
                     "Repository: {} : working directory is not clean. Reset or commit changes manually.".format(self.repository)
             if new_branch:
                 assert start_ref is not None
-                self.git_proxy.checkout_new_branch(self.name, start_ref)
+                self.git_proxy.checkout_new_branch(ref, start_ref)
             else:
-                self.git_proxy.ref_checkout(self.name)
-        else:
-            # already on branch
-            assert not new_branch, "branch {} already exist (checkedout)".format(self.name)
+                self.git_proxy.ref_checkout(ref)
+        # set branch name
+        self.branch_name = self.git_proxy.current_branch
+        # remote-tracking branch: update
         if self.git_proxy.current_branch_is_tracking(only_remote=remote) is not None:
-            # remote-tracking branch: update
             self.git_proxy.pull(remote=remote)
     
     def __del__(self):
-        if self.git_proxy.current_branch == self.name:
+        if self.initial_checkedout not in (self.git_proxy.latest_commit, self.branch_name):
+            # need to checkout back
             if self.git_proxy.is_clean:
-                self.git_proxy.ref_checkout(self.checkedout_branch_on_repo_before)
+                self.git_proxy.ref_checkout(self.initial_checkedout)
             else:
-                if self.checkedout_branch_on_repo_before != self.name:
-                    print("! Working directory is not clean at time of quiting the branch. Reset or commit changes manually.")
-                    raise Warning("Unable to go back to previously checkedout branch: {}".format(self.checkedout_branch_on_repo_before))
-        else:
-            raise Warning("Checkedout branch has changed and is no more {}".format(self.name))
+                print("! Working directory is not clean at time of quiting the branch. Reset or commit changes manually.")
+                raise Warning("Unable to go back to: (previously checkedout state)".format(self.initial_checkedout))
     
     # History ------------------------------------------------------------------
     

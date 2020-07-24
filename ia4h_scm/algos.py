@@ -7,49 +7,49 @@ Building executables algorithms.
 import six
 import json
 
-from .repositories import IA4H_Branch
+from .repositories import IA4Hview
 from .pygmkpack import (Pack, PackError,
                         new_incremental_pack,
                         GCO_ROOTPACK, USUAL_BINARIES)
 
 # TODO: handle multiple repositories/projects to pack
 
-def branch2pack(repository, branch,
-                packname=None,
-                preexisting_pack=False,
-                clean_if_preexisting=True,
-                homepack=None,
-                rootpacks_dir=GCO_ROOTPACK,
-                other_pack_options={},
-                silent=False):
-    """From branch(es) to pack."""
+def IA4H_gitref_to_pack(repository, git_ref,
+                        packname=None,
+                        preexisting_pack=False,
+                        clean_if_preexisting=True,
+                        homepack=None,
+                        rootpacks_dir=GCO_ROOTPACK,
+                        other_pack_options={},
+                        silent=False):
+    """From git ref to pack."""
     if packname is None:
-        packname = branch.name
+        packname = git_ref
     print("-" * 50)
-    print("Start export of branch '{}' to pack '{}'".format(branch, packname))
-    branch = IA4H_Branch(repository, branch)
+    print("Start export of git ref: '{}' to pack: '{}'".format(git_ref, packname))
+    view = IA4Hview(repository, git_ref)
     try:
         if preexisting_pack:
             pack = Pack(packname, preexisting=preexisting_pack, homepack=homepack)
             if clean_if_preexisting:
                 pack.cleanpack()
         else:
-            ancestor_info = branch.latest_official_branch_from_main_release
+            ancestor_info = view.latest_official_branch_from_main_release
             pack = new_incremental_pack(packname,
-                                        branch.latest_main_release_ancestor,
+                                        view.latest_main_release_ancestor,
                                         initial_branch=ancestor_info.get('b', None),
                                         initial_branch_version=ancestor_info.get('v', None),
                                         homepack=homepack,
                                         from_root=rootpacks_dir,
                                         other_pack_options=other_pack_options,
                                         silent=silent)
-        pack.populate_from_IA4H_branch(branch)
+        pack.populate_from_IA4Hview(view)
     except Exception:
-        print("Failed export of branch to pack !")
-        del branch  # to restore the repository state
+        print("Failed export of git ref to pack !")
+        del view  # to restore the repository state
         raise
     else:
-        print("Sucessful export of branch to pack: {}".format(pack.abspath))
+        print("Sucessful export of git ref: {} to pack: {}".format(git_ref, pack.abspath))
     finally:
         print("-" * 50)
     return pack
@@ -110,12 +110,16 @@ def pack_build_executables(pack,
         first = False
     if fatal_build_failure == '__finally__':
         which = [k for k, v in build_report.items() if not v['OK']]
+        OK = [k for k, v in build_report.items() if v['OK']]
         if len(which) > 0:
             print("Failed builds output(s):")
             for k in which:
                 print("{:20}: {}".format(k, build_report[k]['Output']))
             print("-" * 50)
-            raise PackError("Build of executable(s) has failed: {}".format(which))
+            message = "Build of executable(s) has failed: {}".format(which)
+            if len(OK) > 0:
+                message += "(OK for: {})".format(OK)
+            raise PackError(message)
     if dump_build_report:
         with open('build_report.json', 'w') as out:
             json.dump(build_report, out)

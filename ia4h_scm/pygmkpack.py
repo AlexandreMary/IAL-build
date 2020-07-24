@@ -97,9 +97,9 @@ def new_incremental_pack(packname,
 
 def get_homepack(homepack=None):
     """Get a HOMEPACK directory, in argument, $HOMEPACK, or $HOME/pack."""
-    if not homepack:
+    if homepack in (None, ''):
         homepack = os.environ.get('HOMEPACK')
-    if not homepack:
+    if homepack in (None, ''):
         homepack = os.path.join(os.environ.get('HOME'), 'pack')
     return homepack
 
@@ -292,25 +292,25 @@ class Pack(object):
         with self._cd_local():
             copy_files_in_cwd(list_of_files, directory_abspath)
     
-    def populate_from_IA4H_branch(self, branch):
+    def populate_from_IA4Hview(self, view):
         """
-        Populate the incremental pack with contents from a branch.
+        Populate the incremental pack with contents from a IA4Hview.
         
-        :param branch: a IA4H_Branch instance
+        :param view: a IA4Hview instance
         """
-        from .repositories import GitError, IA4H_Branch
-        assert isinstance(branch, IA4H_Branch)
-        self._assert_IA4H_Branch_compatibility(branch)
-        touched_files = branch.touched_files_since_latest_official_tagged_ancestor
-        if len(branch.git_proxy.touched_since_last_commit) > 0:
-            print("! Note:  non-committed files in the branch are exported to the pack.")
+        from .repositories import GitError, IA4Hview
+        assert isinstance(view, IA4Hview)
+        self._assert_IA4Hview_compatibility(view)
+        touched_files = view.touched_files_since_latest_official_tagged_ancestor
+        if len(view.git_proxy.touched_since_last_commit) > 0:
+            print("! Note:  non-committed files in the view are exported to the pack.")
         # files to be copied
         files_to_copy = []
         for k in ('A', 'M', 'T'):
             files_to_copy.extend(list(touched_files.get(k, [])))
         for k in ('R', 'C'):
             files_to_copy.extend([f[1] for f in touched_files.get(k, [])])  # new name of renamed or copied files
-        self.populate_from_files_in_dir(files_to_copy, branch.repository)
+        self.populate_from_files_in_dir(files_to_copy, view.repository)
         # files to be ignored/deleted
         files_to_delete = list(touched_files.get('D', []))
         files_to_delete.extend([f[0] for f in touched_files.get('R', [])])  # original name of renamed files
@@ -320,20 +320,20 @@ class Pack(object):
             if k in touched_files:
                 raise GitError("Don't know what to do with files which Git status is: " + k)
     
-    def _assert_IA4H_Branch_compatibility(self, branch):
-        """Assert that branch and pack have the same original node (ancestor)."""
-        branch_ancestor_info = branch.latest_official_branch_from_main_release
+    def _assert_IA4Hview_compatibility(self, view):
+        """Assert that view and pack have the same original node (ancestor)."""
+        branch_ancestor_info = view.latest_official_branch_from_main_release
         options = self.options
         pack_release = self.release
         assert branch_ancestor_info['r'] == pack_release, \
-            "release: (branch)={} vs. (pack)={}".format(branch_ancestor_info['r'],
+            "release: (view)={} vs. (pack)={}".format(branch_ancestor_info['r'],
                                                         pack_release)
         if branch_ancestor_info['b'] is not None:
             assert branch_ancestor_info['b'] == options['-b'], \
-                "official branch: (branch)={} vs. (pack)={}".format(branch_ancestor_info['b'],
+                "official view: (view)={} vs. (pack)={}".format(branch_ancestor_info['b'],
                                                                     options['-b'])
             assert branch_ancestor_info['v'] == options['-v'], \
-                "official branch version: (branch)={} vs. (pack)={}".format(branch_ancestor_info['v'],
+                "official view version: (view)={} vs. (pack)={}".format(branch_ancestor_info['v'],
                                                                             options['-v'])
         else:
             assert options['-b'] == 'main'
@@ -364,7 +364,7 @@ class Pack(object):
             branchname = '_'.join([os.getlogin(), self.release, packname])
         return branchname
 
-    def save_as_IA4H_Branch(self, repository,
+    def save_as_IA4H_branch(self, repository,
                             files_to_ignore=None,
                             branchname=None,
                             preexisting_branch=False,
@@ -384,16 +384,16 @@ class Pack(object):
         :param push: to push the branch to remote repository after committing
         :param remote: remote repository to be pushed to
         """
-        from .repositories import IA4H_Branch
+        from .repositories import IA4Hview
         # TODO: if branch has not been created with GCO-Git toolbox, the push may fail ?
         if branchname is None:
             branchname = self._packname2branchname
         if preexisting_branch:
-            branch = IA4H_Branch(repository, branchname)
+            branch = IA4Hview(repository, branchname)
         else:
-            branch = IA4H_Branch(repository, branchname,
-                                 new_branch=True,
-                                 start_ref=self.tag_of_latest_official_ancestor)
+            branch = IA4Hview(repository, branchname,
+                              new_branch=True,
+                              start_ref=self.tag_of_latest_official_ancestor)
         touched_files = self.scanpack()
         if isinstance(files_to_ignore, six.string_types):
             with io.open(files_to_ignore, 'r') as f:
@@ -405,7 +405,7 @@ class Pack(object):
             for f in files_to_ignore:
                 branch.git_proxy.delete_file(f)
         print("=> Pack: {} saved as branch: {} in repository: {}".format(
-            self.packname, branch.name, repository))
+            self.packname, branch.branch_name, repository))
         if commit_message is not None:
             branch.git_proxy.stage(touched_files)
             branch.git_proxy.commit(commit_message)
