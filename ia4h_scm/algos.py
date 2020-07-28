@@ -10,7 +10,7 @@ import json
 from .repositories import IA4Hview
 from .pygmkpack import (Pack, PackError,
                         new_incremental_pack,
-                        GCO_ROOTPACK, USUAL_BINARIES)
+                        USUAL_BINARIES)
 
 # TODO: handle multiple repositories/projects to pack
 
@@ -19,7 +19,7 @@ def IA4H_gitref_to_pack(repository, git_ref,
                         preexisting_pack=False,
                         clean_if_preexisting=True,
                         homepack=None,
-                        rootpacks_dir=GCO_ROOTPACK,
+                        rootpack=None,
                         other_pack_options={},
                         silent=False):
     """From git ref to pack."""
@@ -40,7 +40,7 @@ def IA4H_gitref_to_pack(repository, git_ref,
                                         initial_branch=ancestor_info.get('b', None),
                                         initial_branch_version=ancestor_info.get('v', None),
                                         homepack=homepack,
-                                        from_root=rootpacks_dir,
+                                        rootpack=rootpack,
                                         other_pack_options=other_pack_options,
                                         silent=silent)
         pack.populate_from_IA4Hview(view)

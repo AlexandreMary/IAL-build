@@ -56,7 +56,7 @@ def new_incremental_pack(packname,
                          initial_release,
                          initial_branch=None,
                          initial_branch_version=None,
-                         from_root=None,
+                         rootpack=None,
                          homepack=None,
                          other_pack_options={},
                          silent=False):
@@ -67,7 +67,7 @@ def new_incremental_pack(packname,
     :param initial_release: release to start from
     :param initial_branch: branch on release to start from
     :param initial_branch_version: version number on the branch to start from
-    :param from_root: where to look for pack to start from (option -f of gmkpack)
+    :param rootpack: where to look for pack to start from (option -f of gmkpack)
     :param homepack: home directory for packs
     :param other_pack_options: arguments to the command-line to be passed as a dict,
         e.g. {'-l':'IMPIFC1801'}
@@ -83,12 +83,13 @@ def new_incremental_pack(packname,
         args['-b'] = initial_branch
         if initial_branch_version is not None:
             args['-v'] = initial_branch_version
-    if from_root is not None:
-        args['-f'] = from_root
-    if from_root == GCO_ROOTPACK:
+    rootpack = get_rootpack(rootpack)
+    if rootpack is not None:
+        args['-f'] = rootpack
+    if rootpack == GCO_ROOTPACK:
         args['-g'] = 'cy'
         args['-e'] = '.pack'
-    args.update({'-h':pack.homepack})
+    args['-h'] = pack.homepack
     assert isinstance(other_pack_options, dict)
     args.update(other_pack_options)
     gmkpack_cmd(args, silent=silent)
@@ -102,6 +103,15 @@ def get_homepack(homepack=None):
     if homepack in (None, ''):
         homepack = os.path.join(os.environ.get('HOME'), 'pack')
     return homepack
+
+
+def get_rootpack(rootpack=None):
+    """Get a ROOTPACK directory, in argument, $ROOTPACK, or GCO_ROOTPACK."""
+    if rootpack in (None, ''):
+        rootpack = os.environ.get('ROOTPACK')
+    if rootpack == '':
+        rootpack = None
+    return rootpack
 
 
 def copy_files_in_cwd(list_of_files, originary_directory_abspath):
