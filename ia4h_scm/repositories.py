@@ -8,6 +8,7 @@ import six
 import subprocess
 import os
 import re
+import sys
 from contextlib import contextmanager
 
 
@@ -320,6 +321,7 @@ class IA4Hview(object):
         :param start_ref: start reference, in case a new branch to be created
         """
         self.repository = repository
+        self.ref = ref
         self.git_proxy = GitProxy(self.repository)
         self.git_proxy.fetch(remote=remote,
                              ref=ref if remote is not None else None)
@@ -374,6 +376,26 @@ class IA4Hview(object):
                 print("! Working directory is not clean at time of quiting the branch. Reset or commit changes manually.")
                 raise Warning("Unable to go back to: (previously checkedout state)".format(self.initial_checkedout))
     
+    def info(self, out=sys.stdout):
+        """Write info about the view."""
+        info = ["-" * 50,
+                "*** View of '{}' ***".format(self.ref),
+                "Branch: " + self.branch_name,
+                "Latest official tagged ancestor: " + self.latest_official_tagged_ancestor,
+                ]
+        touched_since_last_commit = self.git_proxy.touched_since_last_commit
+        if len(touched_since_last_commit) > 0:
+            info.extend(["Latest commit: " + self.git_proxy.latest_commit,
+                         "Since last commit: "])
+            for m, files in touched_since_last_commit.items():
+                info.append("  {}:".format(m))
+                info.extend(["    " + str(f) for f in files])
+        else:
+            info.append("Commit: " + self.git_proxy.latest_commit)
+        info.append("-" * 50)
+        for line in info:
+            out.write(line + '\n')
+    
     # History ------------------------------------------------------------------
     
     @property
@@ -400,7 +422,7 @@ class IA4Hview(object):
                 return tag
     
     @property
-    def latest_official_tagged_ancestors(self):
+    def latest_official_tagged_ancestor(self):
         """Latest official tagged ancestor."""
         return self.official_tagged_ancestors[-1]
     
@@ -434,5 +456,5 @@ class IA4Hview(object):
     
     @property
     def touched_files_since_latest_official_tagged_ancestor(self):
-        """Lists touched files since *self.latest_official_tagged_ancestors*."""
-        return self.touched_files_since(self.latest_official_tagged_ancestors)
+        """Lists touched files since *self.latest_official_tagged_ancestor*."""
+        return self.touched_files_since(self.latest_official_tagged_ancestor)

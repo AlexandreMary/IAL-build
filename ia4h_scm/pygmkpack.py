@@ -22,9 +22,10 @@ __all__ = []
 
 GCO_ROOTPACK = '/home/mf/dp/marp/martinezs/packs'
 USUAL_BINARIES = ['masterodb', 'bator',
+                  'ioassign', 'lfitools',
                   'pgd', 'prep',
                   'oovar', 'ootestvar',
-                  'ioassign', 'lfitools']
+                  ]
 
 
 class PackError(Exception):
@@ -329,6 +330,9 @@ class Pack(object):
         for k in ('U', 'X', 'B'):
             if k in touched_files:
                 raise GitError("Don't know what to do with files which Git status is: " + k)
+        openmode = 'a' if os.path.exists(self.origin_filename) else 'w'
+        with io.open(self.origin_filename, openmode) as f:
+            view.info(out=f)
     
     def _assert_IA4Hview_compatibility(self, view):
         """Assert that view and pack have the same original node (ancestor)."""
@@ -491,7 +495,12 @@ class Pack(object):
     @property
     def ignored_files_filename(self):
         """File in which to find the files to be ignored at compilation."""
-        return os.path.join(self.abspath, '.ignored_files.pygmkpack')
+        return os.path.join(self.abspath, '.pygmkpack.ignored_files')
+    
+    @property
+    def origin_filename(self):
+        """File in which to find info about origin of the pack."""
+        return os.path.join(self.abspath, '.pygmkpack.origin')
     
     def scanpack(self):
         """List the modified files (present in local directory)."""
