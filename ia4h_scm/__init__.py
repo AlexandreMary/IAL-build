@@ -10,4 +10,4 @@ from __future__ import print_function, absolute_import, unicode_literals, divisi
 Utilities for IA4H source code management.
 """
 
-__version__ = '0.1.0'
+__version__ = '0.1.1'
