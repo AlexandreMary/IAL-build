@@ -320,7 +320,7 @@ class IA4Hview(object):
         :param new_branch: if the **ref** is a new branch to be created
         :param start_ref: start reference, in case a new branch to be created
         """
-        self.repository = repository
+        self.repository = os.path.abspath(repository)
         self.ref = ref
         self.git_proxy = GitProxy(self.repository)
         self.git_proxy.fetch(remote=remote,
@@ -395,6 +395,31 @@ class IA4Hview(object):
         info.append("-" * 50)
         for line in info:
             out.write(line + '\n')
+
+    @classmethod
+    def split_ref(cls, git_ref):
+        """
+        Split the parts in the ref name, e.g.:
+        
+        - for a branch named 'mary_CY47T1_dev', return {'user':'mary', 'release':'CY47T1', 'radical':'dev'}
+        - for a branch named 'CY47_t1', return {'release':'CY47', 'radical':'t1'}
+        - for a tag named 'CY47T1_r1.04', return {'release':'CY47T1', 'radical':'r1', 'version':'04'}
+        - for a tag named 'CY47T1', return {'release':'CY47T1'}
+        """
+        _re = re.compile('((?P<user>.+)_)?' +
+                         '(?P<release>CY\d{2}((T|R)\d)?)' +
+                         '(_(?P<radical>.+))?$')
+        match = _re.match(git_ref)
+        if match:
+            split = match.groupdict()
+            split['version'] = None
+            if split['radical'] is not None:
+                version = re.match('(?P<radical>.+)\.(?P<version>\d{2})$', split['radical'])
+                if version:
+                    split.update(version.groupdict())
+            return split
+        else:
+            raise SyntaxError("Cannot recognize parts in git ref")
     
     # History ------------------------------------------------------------------
     

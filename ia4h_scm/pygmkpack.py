@@ -17,6 +17,8 @@ from contextlib import contextmanager
 from bronx.system.unistd import stdout_redirected, stderr_redirected
 from bronx.stdtypes.date import now
 
+from .util import DirectoryFiltering
+
 #: No automatic export
 __all__ = []
 
@@ -33,17 +35,21 @@ class PackError(Exception):
 
 
 def gmkpack_cmd(arguments,
+                options=[],
                 silent=False):
     """
     Wrapper to gmkpack command.
     
-    :param arguments: arguments to the command-line to be passed as a dict,
-        e.g. {'-l':'IMPIFC1801'}
+    :param arguments: options with an argument to the command-line,
+        to be passed as a dict, e.g. {'-l':'IMPIFC1801'}
+    :param options: options without argument to the command-line,
+        to be passed as a list, e.g. ['-a'] 
     :param silent: if True, hide gmkpack's stdout/stderr output
     """
     arguments_as_list = []
     for k, v in arguments.items():
         arguments_as_list.extend([k, v])
+    arguments_as_list.extend(options)
     command = ['gmkpack',] + arguments_as_list
     if silent:
         with io.open(os.devnull, 'w') as devnull:
@@ -97,6 +103,49 @@ def new_incremental_pack(packname,
     return pack
 
 
+def new_main_pack(initial_release,
+                  branch_radical,
+                  version_number,
+                  compiler_label,
+                  homepack=None,
+                  other_pack_options={},
+                  silent=False):
+    """
+    Create a new incremental pack.
+
+    :param initial_release: release
+    :param branch_radical: "branch" on release (radical in the pack name)
+    :param compiler_label: gmkpack reference compiler version
+    :param version_number: version number on the "branch"
+    :param homepack: home directory for packs
+    :param other_pack_options: arguments to the command-line to be passed as a dict,
+        e.g. {'-l':'IMPIFC1801'}
+    :param silent: to mute gmkpack
+    """
+    compiler_flag = other_pack_options.get('-o', os.environ.get('GMK_OPT'))
+    if compiler_flag in (None, ''):
+        compiler_flag = '2y'
+    args = {'-r':initial_release.replace('cy', '').replace('CY', ''),
+            '-b':branch_radical,
+            '-o':compiler_flag,
+            '-l':compiler_label,
+            '-n':version_number
+            }
+    if homepack is not None:
+        args['-h'] = homepack
+    assert isinstance(other_pack_options, dict)
+    args.update(other_pack_options)
+    packname = '{}{}_{}.{}.{}.{}'.format(args.get('-g', ''), args['-r'], args['-b'],
+                                         args['-n'], args['-l'], args['-o'])
+    if '-e' in other_pack_options:
+        packname += args['-e']
+    pack = Pack(packname, preexisting=False, homepack=homepack)
+    if os.path.exists(pack.abspath):
+        raise PackError('Pack already exists, cannot create: {}'.format(pack.abspath))
+    gmkpack_cmd(args, ['-a'], silent=silent)
+    return pack
+
+
 def get_homepack(homepack=None):
     """Get a HOMEPACK directory, in argument, $HOMEPACK, or $HOME/pack."""
     if homepack in (None, ''):
@@ -128,6 +177,27 @@ def copy_files_in_cwd(list_of_files, originary_directory_abspath):
                         **symlinks)
 
 
+def _generate_filter_function_for(abspaths_to_be_ignored):
+        """
+        Generate filter function for copytree (**ignore** argument),
+        from a list of absolute paths to be ignored.
+        """
+        def ignore(src, names):
+            # absolute paths of files to be ignored in origin directory
+            ignored_names = []
+            for f in names:
+                abs_f = os.path.join(src, f)
+                for path in abspaths_to_be_ignored:
+                    if abs_f == path:  # exact file
+                        ignored_names.append(f)
+                        break
+                    elif os.path.join(path, '') in abs_f:  # the subdirectory is to be ignored
+                        ignored_names.append(f)
+                        break
+            return ignored_names
+        return ignore
+
+
 class Pack(object):
 
     def __init__(self, packname, preexisting=True, homepack=None):
@@ -143,7 +213,12 @@ class Pack(object):
             raise PackError("Pack already exists, while *preexisting* is False ({}).".format(self.abspath))
         if preexisting and not os.path.exists(self.abspath):
             raise PackError("Pack is supposed to preexist, while it doesn't ({}).".format(self.abspath))
-
+    
+    @property
+    def is_incremental(self):
+        """Is the pack incremental ? (vs. main)"""
+        return '-a' not in self.genesis_options
+    
     @contextmanager
     def _cd_local(self):
         """Context: in self._local"""
@@ -153,34 +228,54 @@ class Pack(object):
             yield self._local
         finally:
             os.chdir(owd)
-
+    
+    @property
     def genesis(self):
         """Read pack/.genesis file and return it."""
         genesis = os.path.join(self.abspath, '.genesis')
         with io.open(genesis, 'r') as g:
             genesis = g.readline().strip()
         return genesis
-    
+
+    def _genesis_parse(self):
+        genesis = self.genesis.split()[1:]
+        arguments = {}
+        options = []
+        for i, arg in enumerate(genesis):
+            if arg.startswith('-'):
+                if i == len(genesis) - 1:  # last one, is an option
+                    options.append(arg)
+                elif genesis[i + 1].startswith('-'):  # next starts with '-', is an option
+                    options.append(arg)
+                else:
+                    arguments[arg] = genesis[i + 1]
+        if '-g' in arguments and arguments['-r'].startswith(arguments['-g']):
+            arguments['-r'] = arguments['-r'][len(arguments['-g']):]  # FIXME: workaround gmkpack weirdery
+        return arguments, options
+
     @property
-    def options(self):
-        """Read pack/.genesis file and return it as a dict."""
-        genesis = self.genesis().split()
-        options = dict(zip(genesis[1::2], genesis[2::2]))
-        options.pop('-p', None)
-        return options
+    def genesis_arguments(self):
+        """Return arguments (e.g. -r 47t1) of pack creation as a dict."""
+        return self._genesis_parse()[0]
+
+    @property
+    def genesis_options(self):
+        """Return options (e.g. -a) of pack creation as a list."""
+        return self._genesis_parse()[1]
     
     @property
     def release(self):
         """Lastest ancestor main release to the pack."""
-        return 'CY' + self.options['-r'].upper().replace('CY', '')  # CY might be or not be here
+        return 'CY' + self.genesis_arguments['-r'].upper().replace('CY', '')  # CY might be or not be here
     
     @property
     def tag_of_latest_official_ancestor(self):
         """Tag of latest official ancestor."""
-        options = self.options
+        assert self.is_incremental
+        args = self.genesis_arguments
         tag = self.release
-        if options['-b'] != 'main':
-            tag += '_{}.{}'.format(options['-b'], options['-v'])
+        if args['-b'] != 'main':
+            tag += '_{}.{}'.format(args['-b'], args['-v'])
         return tag
     
     # Methods around *ics_* compilation scripts --------------------------------
@@ -195,14 +290,15 @@ class Pack(object):
     
     def ics_build_for(self, program, silent=False,
                       GMK_THREADS=16,
-                      Ofrt=2):
+                      Ofrt=2,
+                      partition=None):
         """Build the 'ics_*' script for **program**."""
-        args = self.options
+        args = self.genesis_arguments
         args.update({'-p':program.lower()})
         if os.path.exists(self.ics_path_for(program)):
             os.remove(self.ics_path_for(program))
         args.update({'-h':self.homepack})
-        gmkpack_cmd(args, silent=silent)
+        gmkpack_cmd(args, self.genesis_options, silent=silent)
         pattern = 'export GMK_THREADS=(\d+)'
         self._ics_modify(program,
                          re.compile(pattern),
@@ -211,8 +307,13 @@ class Pack(object):
         self._ics_modify(program,
                          re.compile(pattern),
                          pattern.replace('(\d)', str(Ofrt)))
-        if os.path.exists(self.ignored_files_filename):
-            self.ics_ignore_files(program, self.ignored_files_filename)
+        if partition is not None:
+            pattern = '\#SBATCH -p (.+)'
+            self._ics_modify(program,
+                             re.compile(pattern),
+                             pattern.replace('(.+)', partition).replace('\#', '#'))
+        if os.path.exists(self._ignore_at_compiletime_filepath):
+            self.ics_ignore_files(program, self._ignore_at_compiletime_filepath)
     
     def ics_ignore_files(self, program, list_of_files):
         """
@@ -302,14 +403,59 @@ class Pack(object):
         directory_abspath = os.path.abspath(directory)
         with self._cd_local():
             copy_files_in_cwd(list_of_files, directory_abspath)
-    
-    def populate_from_IA4Hview(self, view):
+
+    def populate_from_IA4Hview_as_main(self, view,
+                                       populate_filter_file=None,
+                                       link_filter_file=None):
         """
-        Populate the incremental pack with contents from a IA4Hview.
+        Populate main pack with contents from a IA4Hview.
+        
+        :param populate_filter_file: file in which to read the files to be
+            filtered at populate time.
+            Special values:
+            '__inconfig__' will read according file in config of ia4h_scm package;
+            '__inview__' will read according file in Git view
+        :param link_filter_file: file in which to read the files to be
+            filtered at link time.
+            Special values:
+            '__inconfig__' will read according file in config of ia4h_scm package;
+            '__inview__' will read according file in Git view
+        """
+        from .repositories import IA4Hview
+        assert isinstance(view, IA4Hview)
+        pop_filter_list = self._read_filter_list('populate',
+                                                 populate_filter_file,
+                                                 view)
+        for i, f in enumerate(pop_filter_list):
+            if not os.path.isabs(f):
+                pop_filter_list[i] = os.path.join(view.repository, f)
+        print("\nPopulating projects:")
+        print("-" * 22)
+        for f in sorted(os.listdir(view.repository)):
+            f_src = os.path.join(view.repository, f)
+            f_dst = os.path.join(self._local, f)
+            if f_src in pop_filter_list:
+                print("({} is filtered out)".format(f))
+            else:
+                if os.path.isdir(f_src):  # actual project
+                    print(f)
+                    project = DirectoryFiltering(f_src, pop_filter_list)
+                    project.copytree(f_dst, symlinks=True)
+                else:
+                    shutil.copy(f_src, f_dst)  # single file
+        self.write_view_info(view)
+        link_filter_list = self._read_filter_list('link',
+                                                  link_filter_file,
+                                                  view)
+        self.set_ignored_files_at_linktime(link_filter_list)
+    
+    def populate_from_IA4Hview_as_incremental(self, view):
+        """
+        Populate as incremental pack with contents from a IA4Hview.
         
         :param view: a IA4Hview instance
         """
-        from .repositories import GitError, IA4Hview
+        from .repositories import IA4Hview, GitError
         assert isinstance(view, IA4Hview)
         self._assert_IA4Hview_compatibility(view)
         touched_files = view.touched_files_since_latest_official_tagged_ancestor
@@ -325,49 +471,117 @@ class Pack(object):
         # files to be ignored/deleted
         files_to_delete = list(touched_files.get('D', []))
         files_to_delete.extend([f[0] for f in touched_files.get('R', [])])  # original name of renamed files
-        self.ignore_files(files_to_delete)
+        self.write_ignored_files_at_compiletime(files_to_delete)
         # files of unknown status
         for k in ('U', 'X', 'B'):
             if k in touched_files:
                 raise GitError("Don't know what to do with files which Git status is: " + k)
-        openmode = 'a' if os.path.exists(self.origin_filename) else 'w'
-        with io.open(self.origin_filename, openmode) as f:
+        self.write_view_info(view)
+    
+    @property
+    def origin_filepath(self):
+        """File in which to find info about origin of the pack."""
+        return os.path.join(self.abspath, '.pygmkpack.origin')
+
+    def write_view_info(self, view):
+        """Write view.info into self.origin_filepath."""
+        openmode = 'a' if os.path.exists(self.origin_filepath) else 'w'
+        with io.open(self.origin_filepath, openmode) as f:
             view.info(out=f)
     
     def _assert_IA4Hview_compatibility(self, view):
         """Assert that view and pack have the same original node (ancestor)."""
         branch_ancestor_info = view.latest_official_branch_from_main_release
-        options = self.options
+        args = self.genesis_arguments
         pack_release = self.release
         assert branch_ancestor_info['r'] == pack_release, \
             "release: (view)={} vs. (pack)={}".format(branch_ancestor_info['r'],
                                                         pack_release)
         if branch_ancestor_info['b'] is not None:
-            assert branch_ancestor_info['b'] == options['-b'], \
+            assert branch_ancestor_info['b'] == args['-b'], \
                 "official view: (view)={} vs. (pack)={}".format(branch_ancestor_info['b'],
-                                                                    options['-b'])
-            assert branch_ancestor_info['v'] == options['-v'], \
+                                                                    args['-b'])
+            assert branch_ancestor_info['v'] == args['-v'], \
                 "official view version: (view)={} vs. (pack)={}".format(branch_ancestor_info['v'],
-                                                                            options['-v'])
+                                                                            args['-v'])
         else:
-            assert options['-b'] == 'main'
+            assert args['-b'] == 'main'
     
-    def ignore_files(self, list_of_files):
+    # Filters ------------------------------------------------------------------
+    
+    def _ignore_basename4(self, step):
+        """Get basename of ignore files for a given **step**."""
+        return 'pygmkpack.ignore4{}'.format(step)
+    
+    def _ignore_filepath4(self, step, where, view):
+        """
+        Get filepath of ignore files for a given **step**,
+        in 'config' or 'view'.
+        """
+        if where == '__inconfig__':
+            dirpath = os.path.join(os.path.dirname(__file__), 'config')
+            basename = '.'.join([self._ignore_basename4(step), self.release])
+        elif where == '__inview__':
+            dirpath = view.repository
+            basename = self._ignore_basename4(step)
+        return os.path.join(dirpath, basename)
+    
+    @property
+    def _ignore_at_compiletime_filepath(self):
+        """File in which to find the files to be ignored at compilation time."""
+        return os.path.join(self.abspath, self._ignore_basename4('compile'))
+    
+    def _read_filter_list(self, step, filter_file, view):
+        """Read filter list from file."""
+        if filter_file in ('__inconfig__', '__inview__'):
+            f = self._ignore_filepath4(step, filter_file, view)
+            print(f)
+            if os.path.exists(f):
+                filter_file = f
+            else:
+                print("does not exist !")
+                filter_file = None
+        if filter_file is not None:
+            with io.open(filter_file, 'r') as ff:
+                filter_list = [f.strip() for f in ff.readlines()
+                               if (not f.startswith('#') and f.strip() != '')]
+            print("\nFiltering for {} time (from {}):".format(step, filter_file))
+            print("-" * 17)
+            for f in filter_list:
+                print(f)
+        else:
+            filter_list = []
+        return filter_list
+    
+    def set_ignored_files_at_linktime(self, list_of_ignored_symbols):
+        """Set symbols to be ignored in src/unsxref/verbose."""
+        if isinstance(list_of_ignored_symbols, six.string_types):
+            with io.open(list_of_ignored_symbols, 'r') as f:
+                list_of_ignored_symbols = [l.strip() for l in f.readlines()]
+        for s in list_of_ignored_symbols:
+            symbol_path = os.path.join(self.abspath, 'src', 'unsxref', 'verbose', s)
+            print(s, symbol_path)
+            with io.open(symbol_path, 'a'):
+                os.utime(symbol_path, None)
+    
+    def write_ignored_files_at_compiletime(self, list_of_files):
         """Write files to be ignored in a dedicated file."""
         if isinstance(list_of_files, six.string_types):  # already a file containing filenames: copy
-            shutil.copyfile(list_of_files, self.ignored_files_filename)
+            shutil.copyfile(list_of_files, self._ignore_at_compiletime_filepath)
         else:
-            with io.open(self.ignored_files_filename, 'w') as f:  # a python list
+            with io.open(self._ignore_at_compiletime_filepath, 'w') as f:  # a python list
                 for l in list_of_files:
                     f.write(l + '\n')
         if 'ics_' in self.ics_available:
-            self.ics_ignore_files('', self.ignored_files_filename)
+            self.ics_ignore_files('', self._ignore_at_compiletime_filepath)
+   
+   # From pack to branch -------------------------------------------------------
    
     def _packname2branchname(self):
-        options = self.options
+        args = self.genesis_arguments  # TODO: main pack case
         packname = self.packname
         # prune reference compiler version and compiler options
-        suffix = '.{}.{}'.format(options['-l'], options['-o'])
+        suffix = '.{}.{}'.format(args['-l'], args['-o'])
         if packname.endswith(suffix):
             packname = packname.replace(suffix, '')
         # try to identify user and release
@@ -399,6 +613,7 @@ class Pack(object):
         :param remote: remote repository to be pushed to
         """
         from .repositories import IA4Hview
+        assert self.is_incremental
         # TODO: if branch has not been created with GCO-Git toolbox, the push may fail ?
         if branchname is None:
             branchname = self._packname2branchname
@@ -491,16 +706,6 @@ class Pack(object):
         batch_scheduler.submit(self.ics_path_for(program))
     
     # Pack contents ------------------------------------------------------------
-    
-    @property
-    def ignored_files_filename(self):
-        """File in which to find the files to be ignored at compilation."""
-        return os.path.join(self.abspath, '.pygmkpack.ignored_files')
-    
-    @property
-    def origin_filename(self):
-        """File in which to find info about origin of the pack."""
-        return os.path.join(self.abspath, '.pygmkpack.origin')
     
     def scanpack(self):
         """List the modified files (present in local directory)."""

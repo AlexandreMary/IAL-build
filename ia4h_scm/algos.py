@@ -6,15 +6,17 @@ Building executables algorithms.
 """
 import six
 import json
+import os
 
 from .repositories import IA4Hview
 from .pygmkpack import (Pack, PackError,
-                        new_incremental_pack,
+                        new_incremental_pack, new_main_pack,
                         USUAL_BINARIES)
 
 # TODO: handle multiple repositories/projects to pack
 
-def IA4H_gitref_to_pack(repository, git_ref,
+def IA4H_gitref_to_pack(repository,
+                        git_ref,
                         packname=None,
                         preexisting_pack=False,
                         clean_if_preexisting=True,
@@ -43,7 +45,53 @@ def IA4H_gitref_to_pack(repository, git_ref,
                                         rootpack=rootpack,
                                         other_pack_options=other_pack_options,
                                         silent=silent)
-        pack.populate_from_IA4Hview(view)
+        pack.populate_from_IA4Hview_as_incremental(view)
+    except Exception:
+        print("Failed export of git ref to pack !")
+        del view  # to restore the repository state
+        raise
+    else:
+        print("Sucessful export of git ref: {} to pack: {}".format(git_ref, pack.abspath))
+    finally:
+        print("-" * 50)
+    return pack
+
+
+def IA4H_gitref_to_main_pack(repository,
+                             git_ref,
+                             compiler_label,
+                             homepack=None,
+                             other_pack_options={},
+                             populate_filter_file='__inconfig__',
+                             link_filter_file='__inconfig__',
+                             silent=False):
+    """From git ref to main pack."""
+    print("-" * 50)
+    print("Start export of git ref: '{}' to main pack".format(git_ref))
+    os.environ['GMK_RELEASE_CASE_SENSITIVE'] = '1'
+    view = IA4Hview(repository, git_ref)
+    # prepare arguments
+    ref_split = view.split_ref(git_ref)
+    if ref_split['user'] is not None:
+        other_pack_options['-g'] = ref_split['user'] + '_CY'
+    else:
+        other_pack_options['-g'] = 'CY'
+    if ref_split['radical'] is None:
+        ref_split['radical'] = ''
+    if ref_split['version'] is None:
+        ref_split['version'] = '00'
+    try:
+        # make pack
+        pack = new_main_pack(ref_split['release'],
+                             ref_split['radical'],
+                             ref_split['version'],
+                             compiler_label,
+                             homepack=homepack,
+                             other_pack_options=other_pack_options,
+                             silent=silent)
+        pack.populate_from_IA4Hview_as_main(view,
+                                            populate_filter_file=populate_filter_file,
+                                            link_filter_file=link_filter_file)
     except Exception:
         print("Failed export of git ref to pack !")
         del view  # to restore the repository state
