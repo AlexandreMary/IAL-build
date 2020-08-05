@@ -17,7 +17,7 @@ from contextlib import contextmanager
 from bronx.system.unistd import stdout_redirected, stderr_redirected
 from bronx.stdtypes.date import now
 
-from .util import DirectoryFiltering
+from .util import DirectoryFiltering, copy_files_in_cwd
 
 #: No automatic export
 __all__ = []
@@ -34,168 +34,210 @@ class PackError(Exception):
     pass
 
 
-def gmkpack_cmd(arguments,
-                options=[],
-                silent=False):
-    """
-    Wrapper to gmkpack command.
+class GmkpackTool(object):
     
-    :param arguments: options with an argument to the command-line,
-        to be passed as a dict, e.g. {'-l':'IMPIFC1801'}
-    :param options: options without argument to the command-line,
-        to be passed as a list, e.g. ['-a'] 
-    :param silent: if True, hide gmkpack's stdout/stderr output
-    """
-    arguments_as_list = []
-    for k, v in arguments.items():
-        arguments_as_list.extend([k, v])
-    arguments_as_list.extend(options)
-    command = ['gmkpack',] + arguments_as_list
-    if silent:
-        with io.open(os.devnull, 'w') as devnull:
-            r = subprocess.check_call(command, stdout=devnull, stderr=devnull)
-    else:
-        r = subprocess.check_call(command)
-    return r
+    _default_branch_radical = 'main'
+    _default_version_number = '00'
+    _default_compiler_flag = '2y'
 
-
-def new_incremental_pack(packname,
-                         initial_release,
-                         initial_branch=None,
-                         initial_branch_version=None,
-                         rootpack=None,
-                         homepack=None,
-                         other_pack_options={},
-                         silent=False):
-    """
-    Create a new incremental pack.
-
-    :param packname: name of the pack
-    :param initial_release: release to start from
-    :param initial_branch: branch on release to start from
-    :param initial_branch_version: version number on the branch to start from
-    :param rootpack: where to look for pack to start from (option -f of gmkpack)
-    :param homepack: home directory for packs
-    :param other_pack_options: arguments to the command-line to be passed as a dict,
-        e.g. {'-l':'IMPIFC1801'}
-    :param silent: to mute gmkpack
-    """
-    # TODO: main packs (include ignored files for compil)
-    pack = Pack(packname, preexisting=False, homepack=homepack)
-    if os.path.exists(pack.abspath):
-        raise PackError('Pack already exists, cannot create: {}'.format(pack.abspath))
-    args = {'-r':initial_release.lower().replace('cy', ''),
-            '-u':packname}
-    if initial_branch is not None:
-        args['-b'] = initial_branch
-        if initial_branch_version is not None:
-            args['-v'] = initial_branch_version
-    rootpack = get_rootpack(rootpack)
-    if rootpack is not None:
-        args['-f'] = rootpack
-    if rootpack == GCO_ROOTPACK:
-        args['-g'] = 'cy'
-        args['-e'] = '.pack'
-    args['-h'] = pack.homepack
-    assert isinstance(other_pack_options, dict)
-    args.update(other_pack_options)
-    gmkpack_cmd(args, silent=silent)
-    return pack
-
-
-def new_main_pack(initial_release,
-                  branch_radical,
-                  version_number,
-                  compiler_label,
-                  homepack=None,
-                  other_pack_options={},
-                  silent=False):
-    """
-    Create a new incremental pack.
-
-    :param initial_release: release
-    :param branch_radical: "branch" on release (radical in the pack name)
-    :param compiler_label: gmkpack reference compiler version
-    :param version_number: version number on the "branch"
-    :param homepack: home directory for packs
-    :param other_pack_options: arguments to the command-line to be passed as a dict,
-        e.g. {'-l':'IMPIFC1801'}
-    :param silent: to mute gmkpack
-    """
-    compiler_flag = other_pack_options.get('-o', os.environ.get('GMK_OPT'))
-    if compiler_flag in (None, ''):
-        compiler_flag = '2y'
-    args = {'-r':initial_release.replace('cy', '').replace('CY', ''),
-            '-b':branch_radical,
-            '-o':compiler_flag,
-            '-l':compiler_label,
-            '-n':version_number
-            }
-    if homepack is not None:
-        args['-h'] = homepack
-    assert isinstance(other_pack_options, dict)
-    args.update(other_pack_options)
-    packname = '{}{}_{}.{}.{}.{}'.format(args.get('-g', ''), args['-r'], args['-b'],
-                                         args['-n'], args['-l'], args['-o'])
-    if '-e' in other_pack_options:
-        packname += args['-e']
-    pack = Pack(packname, preexisting=False, homepack=homepack)
-    if os.path.exists(pack.abspath):
-        raise PackError('Pack already exists, cannot create: {}'.format(pack.abspath))
-    gmkpack_cmd(args, ['-a'], silent=silent)
-    return pack
-
-
-def get_homepack(homepack=None):
-    """Get a HOMEPACK directory, in argument, $HOMEPACK, or $HOME/pack."""
-    if homepack in (None, ''):
+    @staticmethod
+    def commandline(arguments,
+                    options=[],
+                    silent=False):
+        """
+        Wrapper to gmkpack command.
+        
+        :param arguments: options with an argument to the command-line,
+            to be passed as a dict, e.g. {'-l':'IMPIFC1801'}
+        :param options: options without argument to the command-line,
+            to be passed as a list, e.g. ['-a'] 
+        :param silent: if True, hide gmkpack's stdout/stderr output
+        """
+        arguments_as_list = []
+        for k, v in arguments.items():
+            arguments_as_list.extend([k, v])
+        arguments_as_list.extend(options)
+        command = ['gmkpack',] + arguments_as_list
+        if silent:
+            with io.open(os.devnull, 'w') as devnull:
+                r = subprocess.check_call(command, stdout=devnull, stderr=devnull)
+        else:
+            r = subprocess.check_call(command)
+        return r
+    
+    @staticmethod
+    def get_homepack():
+        """Get a HOMEPACK directory, $HOMEPACK, or $HOME/pack."""
         homepack = os.environ.get('HOMEPACK')
-    if homepack in (None, ''):
-        homepack = os.path.join(os.environ.get('HOME'), 'pack')
-    return homepack
-
-
-def get_rootpack(rootpack=None):
-    """Get a ROOTPACK directory, in argument, $ROOTPACK, or GCO_ROOTPACK."""
-    if rootpack in (None, ''):
+        if homepack in (None, ''):
+            homepack = os.path.join(os.environ.get('HOME'), 'pack')
+        return homepack
+    
+    @staticmethod
+    def get_rootpack():
+        """Get a ROOTPACK directory from $ROOTPACK if defined, or None."""
         rootpack = os.environ.get('ROOTPACK')
-    if rootpack == '':
-        rootpack = None
-    return rootpack
-
-
-def copy_files_in_cwd(list_of_files, originary_directory_abspath):
-    """Copy a bunch of files from an originary directory to the cwd."""
-    symlinks = {}
-    if six.PY3:
-        symlinks['follow_symlinks'] = True
-    for f in list_of_files:
-        dirpath = os.path.dirname(os.path.abspath(f))
-        if not os.path.exists(dirpath):
-            os.makedirs(dirpath)
-        shutil.copyfile(os.path.join(originary_directory_abspath, f), f,
-                        **symlinks)
-
-
-def _generate_filter_function_for(abspaths_to_be_ignored):
+        return rootpack if rootpack == '' else None
+    
+    @staticmethod
+    def build_packname(args, mainpack):
+        """Emulates gmkpack generation of pack name."""
+        if mainpack:
+            packname = '{}{}_{}.{}.{}.{}'.format(args.get('-g', ''), args['-r'], args['-b'],
+                                                 args['-n'], args['-l'], args['-o'])
+        else:
+            packname = args[-u]
+    
+    @classmethod
+    def args_for_incremental_commandline(cls,
+                                         packname,
+                                         compiler_label,
+                                         initial_release,
+                                         initial_branch=None,
+                                         initial_branch_version=None,
+                                         compiler_flag=None,
+                                         rootpack=None,
+                                         homepack=None):
+        """Build the dict associating arguments to commandline."""
+        args = {'-r':initial_release.lower().replace('cy', ''),
+                '-l':compiler_label,
+                '-u':packname}
+        if initial_branch is not None:
+            args['-b'] = initial_branch
+            if initial_branch_version is not None:
+                args['-v'] = initial_branch_version
+        if compiler_flag in (None, ''):
+            compiler_flag = os.environ.get('GMK_OPT')
+            if compiler_flag in (None, ''):
+                compiler_flag = cls._default_compiler_flag
+        args['-o'] = compiler_flag
+        if rootpack in (None, ''):
+            rootpack = cls.get_rootpack()
+        if rootpack is not None:
+            args['-f'] = rootpack
+        if rootpack == GCO_ROOTPACK:
+            args['-g'] = 'cy'
+            args['-e'] = '.pack'
+        if homepack in (None, ''):
+            homepack = cls.get_homepack()
+        args['-h'] = homepack
+        return args
+    
+    @classmethod
+    def args_for_main_commandline(cls,
+                                  initial_release,
+                                  branch_radical,
+                                  version_number,
+                                  compiler_label,
+                                  compiler_flag=None,
+                                  prefix=None,
+                                  homepack=None):
+        """Build the dict associating arguments to commandline."""
+        if compiler_flag in (None, ''):
+            compiler_flag = os.environ.get('GMK_OPT')
+            if compiler_flag in (None, ''):
+                compiler_flag = cls._default_compiler_flag
+        if branch_radical is None:
+            branch_radical = cls._default_branch_radical
+        if version_number is None:
+            version_number = cls._default_version_number
+        args = {'-r':initial_release.replace('cy', '').replace('CY', ''),
+                '-b':branch_radical,
+                '-o':compiler_flag,
+                '-l':compiler_label,
+                '-n':version_number}
+        if prefix is not None:
+            args['-g'] = prefix
+        if homepack in (None, ''):
+            homepack = cls.get_homepack()
+        args['-h'] = homepack
+        return args
+    
+    @staticmethod
+    def args2packname(args, mainpack):
+        """Emulates gmkpack generation of pack name."""
+        if mainpack:
+            packname = '{}{}_{}.{}.{}.{}'.format(args.get('-g', ''), args['-r'], args['-b'],
+                                                 args['-n'], args['-l'], args['-o'])
+            if '-e' in args:
+                packname += args['-e']
+        else:
+            packname = args['-u']
+        return packname
+        
+    @classmethod
+    def new_incremental_pack(cls,
+                             packname,
+                             compiler_label,
+                             initial_release,
+                             initial_branch=None,
+                             initial_branch_version=None,
+                             compiler_flag=None,
+                             rootpack=None,
+                             homepack=None,
+                             silent=False):
         """
-        Generate filter function for copytree (**ignore** argument),
-        from a list of absolute paths to be ignored.
+        Create a new incremental pack.
+    
+        :param packname: name of the pack
+        :param compiler_label: gmkpack compiler label
+        :param initial_release: release to start from
+        :param initial_branch: branch on release to start from
+        :param initial_branch_version: version number on the branch to start from
+        :param compiler_flag: gmkpack compiler_flag
+        :param rootpack: where to look for pack to start from (option -f of gmkpack)
+        :param homepack: home directory for packs
+        :param silent: to mute gmkpack
         """
-        def ignore(src, names):
-            # absolute paths of files to be ignored in origin directory
-            ignored_names = []
-            for f in names:
-                abs_f = os.path.join(src, f)
-                for path in abspaths_to_be_ignored:
-                    if abs_f == path:  # exact file
-                        ignored_names.append(f)
-                        break
-                    elif os.path.join(path, '') in abs_f:  # the subdirectory is to be ignored
-                        ignored_names.append(f)
-                        break
-            return ignored_names
-        return ignore
+        pack = Pack(packname, preexisting=False, homepack=homepack)
+        if os.path.exists(pack.abspath):
+            raise PackError('Pack already exists, cannot create: {}'.format(pack.abspath))
+        args = cls.args_for_incremental_commandline(packname,
+                                                    compiler_label,
+                                                    initial_release=initial_release,
+                                                    initial_branch=initial_branch,
+                                                    initial_branch_version=initial_branch_version,
+                                                    compiler_flag=compiler_flag,
+                                                    rootpack=rootpack,
+                                                    homepack=homepack)
+        cls.commandline(args, silent=silent)
+        return pack
+    
+    @classmethod
+    def new_main_pack(cls,
+                      initial_release,
+                      branch_radical,
+                      version_number,
+                      compiler_label,
+                      compiler_flag=None,
+                      prefix=None,
+                      homepack=None,
+                      silent=False):
+        """
+        Create a new incremental pack.
+    
+        :param initial_release: release
+        :param branch_radical: "branch" on release (radical in the pack name)
+        :param version_number: version number on the "branch"
+        :param compiler_label: gmkpack reference compiler version
+        :param compiler_flag: gmkpack compiler_flag
+        :param prefix: prefix to the pack name
+        :param homepack: home directory for packs
+        :param silent: to mute gmkpack
+        """
+        args = cls.args_for_main_commandline(initial_release,
+                                             branch_radical,
+                                             version_number,
+                                             compiler_label,
+                                             compiler_flag=compiler_flag,
+                                             prefix=prefix,
+                                             homepack=homepack)
+        packname = cls.args2packname(args, mainpack=True)
+        pack = Pack(packname, preexisting=False, homepack=homepack)
+        if os.path.exists(pack.abspath):
+            raise PackError('Pack already exists, cannot create: {}'.format(pack.abspath))
+        cls.commandline(args, ['-a'], silent=silent)
+        return pack
 
 
 class Pack(object):
@@ -205,7 +247,9 @@ class Pack(object):
         Create Pack object from the **packname**.
         """
         self.packname = packname
-        self.homepack = get_homepack(homepack)
+        if homepack in (None, ''):
+            homepack = GmkpackTool.get_homepack()
+        self.homepack = homepack
         self.abspath = os.path.join(self.homepack, packname)
         self._local = os.path.join(self.abspath, 'src', 'local')
         self._bin = os.path.join(self.abspath, 'bin')
@@ -298,7 +342,7 @@ class Pack(object):
         if os.path.exists(self.ics_path_for(program)):
             os.remove(self.ics_path_for(program))
         args.update({'-h':self.homepack})
-        gmkpack_cmd(args, self.genesis_options, silent=silent)
+        GmkpackTool.commandline(args, self.genesis_options, silent=silent)
         pattern = 'export GMK_THREADS=(\d+)'
         self._ics_modify(program,
                          re.compile(pattern),
@@ -535,11 +579,11 @@ class Pack(object):
         """Read filter list from file."""
         if filter_file in ('__inconfig__', '__inview__'):
             f = self._ignore_filepath4(step, filter_file, view)
-            print(f)
+            print("Read filter file: " + f)
             if os.path.exists(f):
                 filter_file = f
             else:
-                print("does not exist !")
+                print("does not exist ! Ignore.")
                 filter_file = None
         if filter_file is not None:
             with io.open(filter_file, 'r') as ff:
@@ -560,7 +604,6 @@ class Pack(object):
                 list_of_ignored_symbols = [l.strip() for l in f.readlines()]
         for s in list_of_ignored_symbols:
             symbol_path = os.path.join(self.abspath, 'src', 'unsxref', 'verbose', s)
-            print(s, symbol_path)
             with io.open(symbol_path, 'a'):
                 os.utime(symbol_path, None)
     

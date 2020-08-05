@@ -4,13 +4,26 @@
 # This software is governed by the CeCILL-C license under French law.
 # http://www.cecill.info
 from __future__ import print_function, absolute_import, unicode_literals, division
-
 """
 Utilities for IA4H source code management.
 """
 
+import six
 import os
 import shutil
+
+
+def copy_files_in_cwd(list_of_files, originary_directory_abspath):
+    """Copy a bunch of files from an originary directory to the cwd."""
+    symlinks = {}
+    if six.PY3:
+        symlinks['follow_symlinks'] = True
+    for f in list_of_files:
+        dirpath = os.path.dirname(os.path.abspath(f))
+        if not os.path.exists(dirpath):
+            os.makedirs(dirpath)
+        shutil.copyfile(os.path.join(originary_directory_abspath, f), f,
+                        **symlinks)
 
 
 class DirectoryFiltering(object):

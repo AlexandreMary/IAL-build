@@ -9,24 +9,74 @@ import json
 import os
 
 from .repositories import IA4Hview
-from .pygmkpack import (Pack, PackError,
-                        new_incremental_pack, new_main_pack,
+from .pygmkpack import (Pack, PackError, GmkpackTool,
                         USUAL_BINARIES)
 
 # TODO: handle multiple repositories/projects to pack
 
-def IA4H_gitref_to_pack(repository,
-                        git_ref,
-                        packname=None,
-                        preexisting_pack=False,
-                        clean_if_preexisting=True,
-                        homepack=None,
-                        rootpack=None,
-                        other_pack_options={},
-                        silent=False):
-    """From git ref to pack."""
+def prefix_from_user(user=None):
+    return 'CY' if user is None else (user + '_CY')
+
+
+def guess_packname(git_ref,
+                   compiler_label,
+                   packtype,
+                   compiler_flag=None,
+                   abspath=False,
+                   homepack=None,
+                   to_bin=False):
+    """
+    Guess pack name from a number of arguments.
+    
+    :param git_ref: Git reference to be exported to pack
+    :param compiler_label: gmkpack compiler label
+    :param packtype: type of pack, among ('incr', 'main')
+    :param compiler_flag: gmkpack compiler flag
+    :param abspath: True if the absolute path to pack is requested (instead of basename)
+    :param homepack: home of pack
+    :param to_bin: True if the path to binaries subdirectory is requested
+    """
+    if homepack is None:
+        homepack = GmkpackTool.get_homepack()
+    ref_split = IA4Hview.split_ref(git_ref)
+    if packtype == 'main':
+        args = GmkpackTool.args_for_main_commandline(ref_split['release'],
+                                                     ref_split['radical'],
+                                                     ref_split['version'],
+                                                     compiler_label,
+                                                     compiler_flag=compiler_flag,
+                                                     prefix=prefix_from_user(ref_split['user']),
+                                                     homepack=homepack)
+        packname = GmkpackTool.args2packname(args, mainpack=(packtype=='main'))
+    elif packtype == 'incr':
+        assert compiler_flag is not None
+        packname = '.'.join([git_ref, compiler_label, compiler_flag])
+    path_elements = [packname]
+    if abspath:
+        path_elements.insert(0, homepack)
+    if to_bin:
+        path_elements.append('bin')
+    return os.path.join(*path_elements)
+
+
+def IA4H_gitref_to_incrpack(repository,
+                            git_ref,
+                            compiler_label,
+                            compiler_flag=None,
+                            packname=None,
+                            preexisting_pack=False,
+                            clean_if_preexisting=True,
+                            homepack=None,
+                            rootpack=None,
+                            silent=False):
+    """From git ref to incremental pack."""
     if packname is None:
         packname = git_ref
+    elif packname == '__guess__':
+        packname = guess_packname(git_ref,
+                                  compiler_label,
+                                  'incr',
+                                  compiler_flag=compiler_flag)
     print("-" * 50)
     print("Start export of git ref: '{}' to pack: '{}'".format(git_ref, packname))
     view = IA4Hview(repository, git_ref)
@@ -37,14 +87,15 @@ def IA4H_gitref_to_pack(repository,
                 pack.cleanpack()
         else:
             ancestor_info = view.latest_official_branch_from_main_release
-            pack = new_incremental_pack(packname,
-                                        view.latest_main_release_ancestor,
-                                        initial_branch=ancestor_info.get('b', None),
-                                        initial_branch_version=ancestor_info.get('v', None),
-                                        homepack=homepack,
-                                        rootpack=rootpack,
-                                        other_pack_options=other_pack_options,
-                                        silent=silent)
+            pack = GmkpackTool.new_incremental_pack(packname,
+                                                    compiler_label,
+                                                    view.latest_main_release_ancestor,
+                                                    initial_branch=ancestor_info.get('b', None),
+                                                    initial_branch_version=ancestor_info.get('v', None),
+                                                    compiler_flag=compiler_flag,
+                                                    homepack=homepack,
+                                                    rootpack=rootpack,
+                                                    silent=silent)
         pack.populate_from_IA4Hview_as_incremental(view)
     except Exception:
         print("Failed export of git ref to pack !")
@@ -60,8 +111,8 @@ def IA4H_gitref_to_pack(repository,
 def IA4H_gitref_to_main_pack(repository,
                              git_ref,
                              compiler_label,
+                             compiler_flag=None,
                              homepack=None,
-                             other_pack_options={},
                              populate_filter_file='__inconfig__',
                              link_filter_file='__inconfig__',
                              silent=False):
@@ -72,23 +123,16 @@ def IA4H_gitref_to_main_pack(repository,
     view = IA4Hview(repository, git_ref)
     # prepare arguments
     ref_split = view.split_ref(git_ref)
-    if ref_split['user'] is not None:
-        other_pack_options['-g'] = ref_split['user'] + '_CY'
-    else:
-        other_pack_options['-g'] = 'CY'
-    if ref_split['radical'] is None:
-        ref_split['radical'] = ''
-    if ref_split['version'] is None:
-        ref_split['version'] = '00'
     try:
         # make pack
-        pack = new_main_pack(ref_split['release'],
-                             ref_split['radical'],
-                             ref_split['version'],
-                             compiler_label,
-                             homepack=homepack,
-                             other_pack_options=other_pack_options,
-                             silent=silent)
+        pack = GmkpackTool.new_main_pack(ref_split['release'],
+                                         ref_split['radical'],
+                                         ref_split['version'],
+                                         compiler_label,
+                                         compiler_flag=compiler_flag,
+                                         prefix=prefix_from_user(ref_split['user']),
+                                         homepack=homepack,
+                                         silent=silent)
         pack.populate_from_IA4Hview_as_main(view,
                                             populate_filter_file=populate_filter_file,
                                             link_filter_file=link_filter_file)
@@ -113,6 +157,7 @@ def pack_build_executables(pack,
                            fatal_build_failure='__any__',
                            dump_build_report=False):
     """Build pack executables."""
+    os.environ['GMK_RELEASE_CASE_SENSITIVE'] = '1'
     if isinstance(pack, six.string_types):
         pack = Pack(pack, preexisting=True, homepack=homepack)
     elif not isinstance(pack, Pack):

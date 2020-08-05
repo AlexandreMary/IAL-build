@@ -405,6 +405,8 @@ class IA4Hview(object):
         - for a branch named 'CY47_t1', return {'release':'CY47', 'radical':'t1'}
         - for a tag named 'CY47T1_r1.04', return {'release':'CY47T1', 'radical':'r1', 'version':'04'}
         - for a tag named 'CY47T1', return {'release':'CY47T1'}
+
+        (the returned dict is always complete, with None for non-relevant parts)
         """
         _re = re.compile('((?P<user>.+)_)?' +
                          '(?P<release>CY\d{2}((T|R)\d)?)' +
