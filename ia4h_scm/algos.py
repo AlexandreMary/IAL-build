@@ -38,8 +38,8 @@ def guess_packname(git_ref,
     """
     if homepack is None:
         homepack = GmkpackTool.get_homepack()
-    ref_split = IA4Hview.split_ref(git_ref)
     if packtype == 'main':
+        ref_split = IA4Hview.split_ref(git_ref)
         args = GmkpackTool.args_for_main_commandline(ref_split['release'],
                                                      ref_split['radical'],
                                                      ref_split['version'],
@@ -158,6 +158,7 @@ def pack_build_executables(pack,
                            dump_build_report=False):
     """Build pack executables."""
     os.environ['GMK_RELEASE_CASE_SENSITIVE'] = '1'
+    # preprocess args
     if isinstance(pack, six.string_types):
         pack = Pack(pack, preexisting=True, homepack=homepack)
     elif not isinstance(pack, Pack):
@@ -170,7 +171,31 @@ def pack_build_executables(pack,
     elif not isinstance(programs, list):
         raise TypeError("**programs** must be a string (e.g. 'MASTERODB,BATOR') or a list")
     build_report = {}
-    first = True
+    # start by compiling sources without any executable
+    print("-" * 50)
+    print("Start compilation...")
+    try:
+        print("(Re-)generate ics_ script ...")
+        pack.ics_build_for('', **other_options)
+    except Exception as e:
+        message = "... ics_ generation failed: {}".format(str(e))
+        print(message)
+        build_report['compilation'] = {'OK':False, 'Output':message}
+    else:
+        print("Run ics_ ...")
+        compile_output = pack.compile('',
+                                      silent=silent,
+                                      clean_before=cleanpack,
+                                      fatal=False)
+        if compile_output['OK']:
+            print("... compilation OK !")
+        else:  # build failed but not fatal
+            print("... compilation failed !")
+            if not silent:
+                print("-> compilation output: {}".format(compile_output['Output']))
+        print("-" * 50)
+        build_report['compilation'] = compile_output
+    # Executables
     for program in programs:
         print("-" * 50)
         print("Build: {} ...".format(program))
@@ -186,10 +211,10 @@ def pack_build_executables(pack,
             else:
                 build_report[program] = {'OK':False, 'Output':message}
         else:  # ics_ generation OK
-            print("Run ics_ ...")
+            print("Run ics_{} ...".format(program))
             compile_output = pack.compile(program,
                                           silent=silent,
-                                          clean_before=cleanpack and first,
+                                          clean_before=False,
                                           fatal=fatal_build_failure=='__any__')
             if compile_output['OK']:
                 print("... {} OK !".format(program))
@@ -199,7 +224,6 @@ def pack_build_executables(pack,
                     print("-> build output: {}".format(compile_output['Output']))
             print("-" * 50)
             build_report[program] = compile_output
-        first = False
     if fatal_build_failure == '__finally__':
         which = [k for k, v in build_report.items() if not v['OK']]
         OK = [k for k, v in build_report.items() if v['OK']]

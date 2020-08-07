@@ -403,12 +403,14 @@ class Pack(object):
         :param replacement: replacement line
         """
         ics = self._ics_read(program)
+        print("_ics_modify:", pattern)
         for i, line in enumerate(ics):
             try:
                 ok = line == pattern or pattern.match(line)
             except AttributeError:
                 ok = False
             if ok:
+                print(ics[i], '=>', replacement)
                 ics[i] = replacement
                 break
         self._ics_write(program, ics)
@@ -716,21 +718,30 @@ class Pack(object):
                                        '.'.join([program.lower(),
                                                  now().stdvortex]))
                 with io.open(outname, 'w') as f:
-                    subprocess.check_call(cmd, stdout=f, stderr=f)
+                    ok = subprocess.check_call(cmd, stdout=f, stderr=f)
             else:
                 outname = None
-                subprocess.check_call(cmd)
+                ok = subprocess.check_call(cmd)
         except Exception:
             if fatal:
                 raise
+            else:
+                ok = False
         else:
-            if fatal and not self.executable_ok(program):
-                message = "Build of {} failed.".format(program)
+            ok = True if int(ok) == 0 else False
+            if program != '':
+                ok = self.executable_ok(program)
+            if fatal and not ok:
+                if program == '':
+                    message = "Compilation failed."
+                else:
+                    message = "Build of {} failed.".format(program)
                 if outname is not None:
                     message += " Output: " + outname
                 raise PackError(message)
-        return {'OK':self.executable_ok(program),
-                'Output':outname}
+        report = {'OK':ok,
+                  'Output':outname}
+        return report
     
     def compile_all_programs(self, silent=False):
         """Run interactively the ics_ compilation script for **program**"""
