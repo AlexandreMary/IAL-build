@@ -10,4 +10,4 @@ from __future__ import print_function, absolute_import, unicode_literals, divisi
 IA4H (IFS-ARPEGE-ALADIN-AROME-ALARO-HARMONIE) source code management.
 """
 
-__version__ = '0.1.2'
+__version__ = '0.1.3'

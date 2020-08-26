@@ -421,7 +421,9 @@ class IA4Hview(object):
                     split.update(version.groupdict())
             return split
         else:
-            raise SyntaxError("Cannot recognize parts in git ref")
+            raise SyntaxError(" ".join(["Cannot recognize parts in git ref,",
+                                        "which syntax must look like one of",
+                                        "mary_CY47T1_dev, CY47_t1, CY47T1_r1.04, CY47T1"]))
     
     # History ------------------------------------------------------------------
     
