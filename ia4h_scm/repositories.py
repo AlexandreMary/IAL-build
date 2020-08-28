@@ -73,25 +73,62 @@ class GitProxy(object):
         return branch
     
     # Branch(es) ---------------------------------------------------------------
-    
-    @property
-    def branches(self):
-        """List of branches (local and remotes)."""
-        prefix = 'branch:'
-        return sorted([r[len(prefix):] for r in self.refs_get().keys()
-                       if r.startswith(prefix)])
-    
+
     @property
     def local_branches(self):
         """List of local branches."""
-        return [b for b in self.branches if '/' not in b]
+        return sorted([r['ref'] for r in self._refs_get().values()
+                       if r['rtype'] == 'branch' and r['remote'] is None])
     
     def remote_branches(self, only_remote=None):
-        """List of remote branches. All remotes if only_remote==''."""
-        remote_branches = [b for b in self.branches if '/' in b]
-        if only_remote not in (None, ''):
-            remote_branches = [b for b in remote_branches if b.startswith(only_remote)]
-        return remote_branches
+        """
+        Dictionary of remote branches:
+        {'remote1':[branch, ...],
+         'remote2':...}
+        If **only_remote**, keep only this.
+        """
+        remotes = {}
+        for r in self._refs_get().values():
+            if r['rtype'] == 'branch' and r['remote'] is not None:  # is a branch and not local
+                if r['remote'] not in remotes:
+                    remotes[r['remote']] = [r['ref']]
+                else:
+                    remotes[r['remote']].append(r['ref'])
+        if only_remote:
+            for k in list(remotes.keys()):
+                if k != only_remote:
+                    remotes.pop(k)
+        return remotes
+    
+    def detached_branches(self, only_remote=None):
+        """List remote branches as detached (remote/branch)."""
+        branches = []
+        for r, branches in self.remote_branches(only_remote):
+            branches.extend([self.branch_as_detached(b, r) for b in branches])
+        return branches
+    
+    def branch_as_detached(self, branch, remote=None):
+        """
+        Get branch as detached syntax (remote/branch).
+        If **remote** is None:
+          - if only one remote tracks **branch**, fine
+          - if several, raise an error
+        """
+        if remote is not None:
+            return '/'.join([r, branch])
+        else:  # recursive try on remotes
+            detached = []
+            for remote, branches in self.remote_branches().items():
+                if branch in branches:
+                    detached.append(self.branch_as_detached(branch, remote))
+            if len(detached) > 1:
+                msg = " ".join(["Branch '{}' has been found in more than one remote.",
+                                "Need to specify remote from which to get as detached."])
+                raise GitError(msg.format(branch))
+            elif len(detached) == 0:
+                raise GitError("Branch '{}' has been found in any remote.".format(branch))
+            else:
+                return detached[0]
 
     def current_branch_is_tracking(self, only_remote=None):
         """Return remote-tracking branch of the current branch, if existing."""
@@ -127,36 +164,41 @@ class GitProxy(object):
     
     # Ref(s) -------------------------------------------------------------------
     
-    def refs_get(self):
-        """Get references as a dict('<type>:<ref>':<hash>), type being branch or tag."""
+    def _refs_get(self):
         git_cmd = ['git', 'show-ref']
         list_of_refs = [ref.split() for ref in self._git_cmd(git_cmd)]
         refs = {}
         for h, r in list_of_refs:
-            if r.startswith('refs/tags'):
-                ref = 'tag:'
-            else:
-                ref = 'branch:'
-            ref += '/'.join(r.split('/')[2:])  # tags and branches : refs/tags/... or refs/heads/... or refs/remotes/...        
-            refs[ref] = h
+            if r.startswith('refs/remotes'):
+                refs[h] = {'ref':r.split('/')[3],
+                           'rtype':'branch',
+                           'remote':r.split('/')[2]}
+            elif r.startswith('refs/heads'):
+                refs[h] = {'ref':r.split('/')[2],
+                           'rtype':'branch',
+                           'remote':None}
+            elif r.startswith('refs/tags'):
+                refs[h] = {'ref':r.split('/')[2],
+                           'rtype':'tag',
+                           'remote':None}
         return refs
 
     def ref_exists(self, ref):
         """Check whether a ref (tag, branch, commit) exists."""
-        refs = self.refs_get()
-        return (ref in (['HEAD'] +
-                        [r[r.index(':') + 1:] for r in refs.keys()])  # branches & tags
-                or self.commit_exists(ref))
+        return (ref == 'HEAD' or
+                self.ref_is_tag(ref) or
+                self.ref_is_branch(ref) or
+                self.commit_exists(ref))
     
     def ref_is_tag(self, ref):
         """Check whether reference is tag."""
-        assert self.ref_exists(ref)
         return ref in self.tags
     
     def ref_is_branch(self, ref):
         """Check whether reference is branch."""
-        assert self.ref_exists(ref)
-        return ref in self.branches
+        return (ref in self.local_branches or
+                any([ref in remote for remote in self.remote_branches().values()]) or
+                ref in self.detached_branches())
     
     def refs_common_ancestor(self, ref1, ref2):
         """Common ancestor commit between 2 references (commits, branches, tags)."""
@@ -175,9 +217,8 @@ class GitProxy(object):
     @property
     def tags(self):
         """Return list of tags.""" 
-        prefix = 'tag:'
-        return sorted([r[len(prefix):] for r in self.refs_get().keys()
-                       if r.startswith(prefix)])
+        return sorted([r['ref'] for r in self._refs_get().values()
+                       if r['rtype'] == 'tag'])
     
     def tag_points_to(self, tag):
         """Return the associated commit to **tag**."""
@@ -267,7 +308,7 @@ class GitProxy(object):
         for line in touched:
             line = line.replace('??', 'A')
             if line[0] in ('A', 'M', 'T', 'D'):
-                asdict[line[0]].add(line.split()[1])
+                asdict[line[0]].add(line.strip())
             elif line[0] in ('C', 'R'):
                 asdict[line[0]].add(tuple(line.split()[1::2]))  # file1 -> file2
             else:
@@ -331,7 +372,7 @@ class IA4Hview(object):
             self.initial_checkedout = self.git_proxy.latest_commit
         else:
             self.initial_checkedout = self.git_proxy.current_branch
-        # need to switch
+        # determine if need to checkout
         if self.git_proxy.ref_exists(ref):
             assert not new_branch, "ref: {} already exists, while **new_branch** is True.".format(ref)
             if self.git_proxy.ref_is_branch(ref):
@@ -360,7 +401,14 @@ class IA4Hview(object):
                 assert start_ref is not None
                 self.git_proxy.checkout_new_branch(ref, start_ref)
             else:
-                self.git_proxy.ref_checkout(ref)
+                if self.git_proxy.ref_is_branch(ref) and ref in self.git_proxy.detached_branches():
+                    raise NotImplementedError("Checking out detached branch")
+                if self.git_proxy.ref_is_branch(ref) and ref not in self.git_proxy.local_branches:
+                    # remote branch: need to checkout as new local branch
+                    tracked = self.git_proxy.branch_as_detached(branch, remote)
+                    self.git_proxy.checkout_new_branch(ref, tracked)
+                else:
+                    self.git_proxy.ref_checkout(ref)
         # set branch name
         self.branch_name = self.git_proxy.current_branch
         # remote-tracking branch: update
