@@ -284,7 +284,7 @@ class GitProxy(object):
         touched = self._git_cmd(git_cmd)
         for line in touched:
             if line[0] in ('A', 'M', 'T', 'D'):
-                asdict[line[0]].add(line.split()[1])
+                asdict[line[0]].add(line[2:].strip())
             elif line[0] in ('C', 'R'):
                 asdict[line[0]].add(tuple(line.split()[1:3]))
             else:
@@ -308,7 +308,7 @@ class GitProxy(object):
         for line in touched:
             line = line.replace('??', 'A')
             if line[0] in ('A', 'M', 'T', 'D'):
-                asdict[line[0]].add(line.strip())
+                asdict[line[0]].add(line[2:].strip())
             elif line[0] in ('C', 'R'):
                 asdict[line[0]].add(tuple(line.split()[1::2]))  # file1 -> file2
             else:

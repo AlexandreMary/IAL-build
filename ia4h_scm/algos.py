@@ -175,8 +175,9 @@ def pack_build_executables(pack,
     print("-" * 50)
     print("Start compilation...")
     try:
-        print("(Re-)generate ics_ script ...")
-        pack.ics_build_for('', **other_options)
+        if not pack.ics_available_for('') or regenerate_ics:
+            print("(Re-)generate ics_ script ...")
+            pack.ics_build_for('', **other_options)
     except Exception as e:
         message = "... ics_ generation failed: {}".format(str(e))
         print(message)
