@@ -102,10 +102,10 @@ class GitProxy(object):
     
     def detached_branches(self, only_remote=None):
         """List remote branches as detached (remote/branch)."""
-        branches = []
-        for r, branches in self.remote_branches(only_remote):
-            branches.extend([self.branch_as_detached(b, r) for b in branches])
-        return branches
+        detached = []
+        for r, branches in self.remote_branches(only_remote).items():
+            detached.extend([self.branch_as_detached(b, r) for b in branches])
+        return detached
     
     def branch_as_detached(self, branch, remote=None):
         """
@@ -115,7 +115,7 @@ class GitProxy(object):
           - if several, raise an error
         """
         if remote is not None:
-            return '/'.join([r, branch])
+            return '/'.join([remote, branch])
         else:  # recursive try on remotes
             detached = []
             for remote, branches in self.remote_branches().items():
@@ -405,7 +405,8 @@ class IA4Hview(object):
                     raise NotImplementedError("Checking out detached branch")
                 if self.git_proxy.ref_is_branch(ref) and ref not in self.git_proxy.local_branches:
                     # remote branch: need to checkout as new local branch
-                    tracked = self.git_proxy.branch_as_detached(branch, remote)
+                    tracked = self.git_proxy.branch_as_detached(ref, remote)
+                    print("Branch '{}' to be tracked as new branch from '{}'".format(ref, tracked))
                     self.git_proxy.checkout_new_branch(ref, tracked)
                 else:
                     self.git_proxy.ref_checkout(ref)
