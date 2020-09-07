@@ -643,7 +643,9 @@ class Pack(object):
                             preexisting_branch=False,
                             commit_message=None,
                             push=False,
-                            remote=None):
+                            remote=None,
+                            ask_confirmation=False,
+                            dry_run=False):
         """
         Save the contents of the pack into an IA4H Branch.
         
@@ -656,30 +658,67 @@ class Pack(object):
             after populating the branch with given commit message
         :param push: to push the branch to remote repository after committing
         :param remote: remote repository to be pushed to
+        :param ask_confirmation: ask for confirmation about the repo/branch
+            before actually creating branch and/or populating
+        :param dry_run: do not actually create/populate branch
         """
         from .repositories import IA4Hview
-        assert self.is_incremental
+        if not self.is_incremental:
+            raise NotImplementedError("Populating branch from a main pack.")
         # TODO: if branch has not been created with GCO-Git toolbox, the push may fail ?
+        # => Ask Stephane !
+        # guess branch name
         if branchname is None:
             branchname = self._packname2branchname
+        touched_files = self.scanpack()
+        if isinstance(files_to_ignore, six.string_types):
+            with io.open(files_to_ignore, 'r') as f:
+                files_to_ignore = [file.strip() for file in f.readlines()]
+        # printings
+        print("Files modified or added:")
+        for f in touched_files:
+            print(f)
+        print("-" * 80)
+        print("Files to be deleted from repo:")
+        for f in files_to_ignore:
+            print(f)
+        print("-" * 80)
+        if preexisting_branch:
+            print("About to populate preexisting branch: '{}'".format(branchname))
+        else:
+            print("About to create & populate branch: '{}'".format(branchname))
+            print("Starting from tag: {}".format(self.tag_of_latest_official_ancestor))
+        # dry_run or confirmation required
+        if dry_run:
+            print("Dry run. Exit.")
+            exit()
+        else:
+            if ask_confirmation:
+                ok = raw_input("Everything OK ? [y/n]")
+                if ok == 'n':
+                    print("Confirmation cancelled: exit.")
+                    exit()
+                elif ok != 'y':
+                    print("Please answer by 'y' or 'n'. Exit.")
+                    exit()
+        # now checkout branch
         if preexisting_branch:
             branch = IA4Hview(repository, branchname)
         else:
             branch = IA4Hview(repository, branchname,
                               new_branch=True,
                               start_ref=self.tag_of_latest_official_ancestor)
-        touched_files = self.scanpack()
-        if isinstance(files_to_ignore, six.string_types):
-            with io.open(files_to_ignore, 'r') as f:
-                files_to_ignore = [file.strip() for file in f.readlines()]
+        # copy modified/added files
         with branch.git_proxy.cd_repo():
             copy_files_in_cwd(touched_files, self._local)
+        # remove files to be so
         if files_to_ignore is not None:
             assert isinstance(files_to_ignore, list)
             for f in files_to_ignore:
                 branch.git_proxy.delete_file(f)
         print("=> Pack: {} saved as branch: {} in repository: {}".format(
             self.packname, branch.branch_name, repository))
+        # commit  TOBECHECKED:
         if commit_message is not None:
             branch.git_proxy.stage(touched_files)
             branch.git_proxy.commit(commit_message)
