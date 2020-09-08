@@ -328,6 +328,11 @@ class Pack(object):
         """Path of the compilation script for **program**."""
         return os.path.join(self.abspath, 'ics_' + program.lower())
 
+    def ics_remove(self, program):
+        """Remove the compilation script for **program**."""
+        if self.ics_available_for(program):
+            os.remove(self.ics_path_for(program))
+
     def ics_available_for(self, program):
         """Whether the compilation script exists for **program**."""
         return os.path.exists(self.ics_path_for(program))
@@ -335,27 +340,46 @@ class Pack(object):
     def ics_build_for(self, program, silent=False,
                       GMK_THREADS=16,
                       Ofrt=2,
-                      partition=None):
+                      partition=None,
+                      no_compilation=False,
+                      no_libs_update=False):
         """Build the 'ics_*' script for **program**."""
         args = self.genesis_arguments
         args.update({'-p':program.lower()})
         if os.path.exists(self.ics_path_for(program)):
             os.remove(self.ics_path_for(program))
         args.update({'-h':self.homepack})
+        # build ics
         GmkpackTool.commandline(args, self.genesis_options, silent=silent)
+        # modify number of threads
         pattern = 'export GMK_THREADS=(\d+)'
         self._ics_modify(program,
                          re.compile(pattern),
                          pattern.replace('(\d+)', str(GMK_THREADS)))
+        # modify optimization level
         pattern = 'Ofrt=(\d)'
         self._ics_modify(program,
                          re.compile(pattern),
                          pattern.replace('(\d)', str(Ofrt)))
+        # modify partition
         if partition is not None:
             pattern = '\#SBATCH -p (.+)'
             self._ics_modify(program,
                              re.compile(pattern),
                              pattern.replace('(.+)', partition).replace('\#', '#'))
+        # switch off compilation
+        if no_compilation:
+            pattern = 'export ICS_ICFMODE=(.+)'
+            self._ics_modify(program,
+                             re.compile(pattern),
+                             pattern.replace('(.+)', 'off'))
+        # switch off libs update
+        if no_libs_update:
+            pattern = 'export ICS_UPDLIBS=(.+)'
+            self._ics_modify(program,
+                             re.compile(pattern),
+                             pattern.replace('(.+)', 'off'))
+        # ignore files
         if os.path.exists(self._ignore_at_compiletime_filepath):
             self.ics_ignore_files(program, self._ignore_at_compiletime_filepath)
     
@@ -567,6 +591,9 @@ class Pack(object):
         if where == '__inconfig__':
             dirpath = os.path.join(os.path.dirname(__file__), 'config')
             basename = '.'.join([self._ignore_basename4(step), self.release])
+            filepath = os.path.join(dirpath, basename)
+            if not os.path.exists(filepath):
+                basename = self._ignore_basename4(step)
         elif where == '__inview__':
             dirpath = view.repository
             basename = self._ignore_basename4(step)
@@ -620,8 +647,8 @@ class Pack(object):
         if 'ics_' in self.ics_available:
             self.ics_ignore_files('', self._ignore_at_compiletime_filepath)
    
-   # From pack to branch -------------------------------------------------------
-   
+    # From pack to branch -------------------------------------------------------
+    @property
     def _packname2branchname(self):
         args = self.genesis_arguments  # TODO: main pack case
         packname = self.packname
@@ -638,94 +665,88 @@ class Pack(object):
         return branchname
 
     def save_as_IA4H_branch(self, repository,
-                            files_to_ignore=None,
+                            files_to_delete=[],
                             branchname=None,
                             preexisting_branch=False,
                             commit_message=None,
-                            push=False,
                             remote=None,
                             ask_confirmation=False,
-                            dry_run=False):
+                            register_in_GCOdb=False):
         """
         Save the contents of the pack into an IA4H Branch.
         
-        :param files_to_ignore: either the filename of a file containing
-            the list of files to ignore, or a list of filenames
+        :param files_to_delete: either the filename of a file containing
+            the list of files to ignore, or directly a list of files to delete
+            in branch
         :param branchname: if None, generated from pack options as:
             <logname>_<release>_<packname>
         :param preexisting_branch: whether the branch already exists in the repository
         :param commit_message: if not None, activate committing the modifications
             after populating the branch with given commit message
-        :param push: to push the branch to remote repository after committing
         :param remote: remote repository to be pushed to
         :param ask_confirmation: ask for confirmation about the repo/branch
             before actually creating branch and/or populating
-        :param dry_run: do not actually create/populate branch
+        :param register_in_GCOdb: to register the branch in GCO database
         """
         from .repositories import IA4Hview
         if not self.is_incremental:
             raise NotImplementedError("Populating branch from a main pack.")
-        # TODO: if branch has not been created with GCO-Git toolbox, the push may fail ?
-        # => Ask Stephane !
         # guess branch name
         if branchname is None:
             branchname = self._packname2branchname
         touched_files = self.scanpack()
-        if isinstance(files_to_ignore, six.string_types):
-            with io.open(files_to_ignore, 'r') as f:
-                files_to_ignore = [file.strip() for file in f.readlines()]
+        if isinstance(files_to_delete, six.string_types):
+            with io.open(files_to_delete, 'r') as f:
+                files_to_delete = [file.strip() for file in f.readlines()]
         # printings
         print("Files modified or added:")
         for f in touched_files:
             print(f)
         print("-" * 80)
-        print("Files to be deleted from repo:")
-        for f in files_to_ignore:
-            print(f)
-        print("-" * 80)
+        if len(files_to_delete) > 0:
+            print("Files to be deleted from repo:")
+            for f in files_to_delete:
+                print(f)
+            print("-" * 80)
         if preexisting_branch:
             print("About to populate preexisting branch: '{}'".format(branchname))
         else:
             print("About to create & populate branch: '{}'".format(branchname))
             print("Starting from tag: {}".format(self.tag_of_latest_official_ancestor))
-        # dry_run or confirmation required
-        if dry_run:
-            print("Dry run. Exit.")
-            exit()
-        else:
-            if ask_confirmation:
-                ok = raw_input("Everything OK ? [y/n]")
-                if ok == 'n':
-                    print("Confirmation cancelled: exit.")
-                    exit()
-                elif ok != 'y':
-                    print("Please answer by 'y' or 'n'. Exit.")
-                    exit()
+        if commit_message is not None:
+            print("And commit with message: '{}'".format(commit_message))
+        if ask_confirmation:
+            ok = raw_input("Everything OK ? [y/n] ")
+            if ok == 'n':
+                print("Confirmation cancelled: exit.")
+                exit()
+            elif ok != 'y':
+                print("Please answer by 'y' or 'n'. Exit.")
+                exit()
         # now checkout branch
         if preexisting_branch:
             branch = IA4Hview(repository, branchname)
         else:
             branch = IA4Hview(repository, branchname,
                               new_branch=True,
-                              start_ref=self.tag_of_latest_official_ancestor)
+                              start_ref=self.tag_of_latest_official_ancestor,
+                              register_in_GCOdb=register_in_GCOdb)
         # copy modified/added files
         with branch.git_proxy.cd_repo():
             copy_files_in_cwd(touched_files, self._local)
         # remove files to be so
-        if files_to_ignore is not None:
-            assert isinstance(files_to_ignore, list)
-            for f in files_to_ignore:
-                branch.git_proxy.delete_file(f)
-        print("=> Pack: {} saved as branch: {} in repository: {}".format(
+        assert isinstance(files_to_delete, list)
+        for f in files_to_delete:
+            branch.git_proxy.delete_file(f)
+        print("=> Pack: '{}' saved as branch: '{}' in repository: {}".format(
             self.packname, branch.branch_name, repository))
         # commit  TOBECHECKED:
         if commit_message is not None:
             branch.git_proxy.stage(touched_files)
-            branch.git_proxy.commit(commit_message)
+            branch.git_proxy.commit(commit_message, add=True)
             #print("Committed: {}".format(commit))
-            if push:
-                branch.push(remote=remote)
-                print("Pushed.")
+        else:
+            print("Changes are not commited: cf. 'git status'")
         return branch
         
     # Executables --------------------------------------------------------------

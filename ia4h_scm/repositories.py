@@ -34,10 +34,10 @@ class GitProxy(object):
         finally:
             os.chdir(owd)
     
-    def _git_cmd(self, cmd):
+    def _git_cmd(self, cmd, stderr=None):
         """Wrapper to execute a git command."""
         return [line.strip() for line in
-                subprocess.check_output(cmd, cwd=self.repository).decode('utf-8').split('\n')
+                subprocess.check_output(cmd, cwd=self.repository, stderr=stderr).decode('utf-8').split('\n')
                 if line != '']
     
     # Repository ---------------------------------------------------------------
@@ -77,7 +77,7 @@ class GitProxy(object):
     @property
     def local_branches(self):
         """List of local branches."""
-        return sorted([r['ref'] for r in self._refs_get().values()
+        return sorted([r['ref'] for r in self._refs_get()
                        if r['rtype'] == 'branch' and r['remote'] is None])
     
     def remote_branches(self, only_remote=None):
@@ -88,7 +88,7 @@ class GitProxy(object):
         If **only_remote**, keep only this.
         """
         remotes = {}
-        for r in self._refs_get().values():
+        for r in self._refs_get():
             if r['rtype'] == 'branch' and r['remote'] is not None:  # is a branch and not local
                 if r['remote'] not in remotes:
                     remotes[r['remote']] = [r['ref']]
@@ -146,7 +146,7 @@ class GitProxy(object):
     
     def checkout_new_branch(self, branch, start_ref=None):
         """Create and checkout new branch, from current ref or **start_ref**."""
-        print("Checkout new branch: " + branch)
+        print("Checkout new branch: '{}'".format(branch))
         git_cmd = ['git', 'checkout', '-b', branch]
         if start_ref is not None:
             git_cmd.append(start_ref)
@@ -167,20 +167,23 @@ class GitProxy(object):
     def _refs_get(self):
         git_cmd = ['git', 'show-ref']
         list_of_refs = [ref.split() for ref in self._git_cmd(git_cmd)]
-        refs = {}
+        refs = []
         for h, r in list_of_refs:
             if r.startswith('refs/remotes'):
-                refs[h] = {'ref':r.split('/')[3],
-                           'rtype':'branch',
-                           'remote':r.split('/')[2]}
+                refs.append({'ref':r.split('/')[3],
+                             'hash':h,
+                             'rtype':'branch',
+                             'remote':r.split('/')[2]})
             elif r.startswith('refs/heads'):
-                refs[h] = {'ref':r.split('/')[2],
-                           'rtype':'branch',
-                           'remote':None}
+                refs.append({'ref':r.split('/')[2],
+                             'hash':h,
+                             'rtype':'branch',
+                             'remote':None})
             elif r.startswith('refs/tags'):
-                refs[h] = {'ref':r.split('/')[2],
-                           'rtype':'tag',
-                           'remote':None}
+                refs.append({'ref':r.split('/')[2],
+                             'hash':h,
+                             'rtype':'tag',
+                             'remote':None})
         return refs
 
     def ref_exists(self, ref):
@@ -217,7 +220,7 @@ class GitProxy(object):
     @property
     def tags(self):
         """Return list of tags.""" 
-        return sorted([r['ref'] for r in self._refs_get().values()
+        return sorted([r['ref'] for r in self._refs_get()
                        if r['rtype'] == 'tag'])
     
     def tag_points_to(self, tag):
@@ -245,7 +248,7 @@ class GitProxy(object):
         """Check whether commit is existing."""
         git_cmd = ['git', 'rev-parse', '--verify', commit + '^{commit}']
         try:
-            self._git_cmd(git_cmd)
+            self._git_cmd(git_cmd, stderr=subprocess.STDOUT)
             return True
         except subprocess.CalledProcessError:
             return False
@@ -353,13 +356,15 @@ class IA4Hview(object):
     def __init__(self, repository, ref,
                  remote=None,
                  new_branch=False,
-                 start_ref=None):
+                 start_ref=None,
+                 register_in_GCOdb=False):
         """
         Hold **ref** from **repository**.
 
         :param remote: fetch/pull ref from a remote
         :param new_branch: if the **ref** is a new branch to be created
         :param start_ref: start reference, in case a new branch to be created
+        :param register_in_GCOdb: register branch in GCO database.
         """
         self.repository = os.path.abspath(repository)
         self.ref = ref
@@ -400,6 +405,9 @@ class IA4Hview(object):
             if new_branch:
                 assert start_ref is not None
                 self.git_proxy.checkout_new_branch(ref, start_ref)
+                if register_in_GCOdb:
+                    start_commit = self.git_proxy.tag_points_to(start_ref)
+                    self.GCOdb_register(start_commit)
             else:
                 if self.git_proxy.ref_is_branch(ref) and ref in self.git_proxy.detached_branches():
                     raise NotImplementedError("Checking out detached branch")
@@ -417,13 +425,13 @@ class IA4Hview(object):
             self.git_proxy.pull(remote=remote)
     
     def __del__(self):
-        if self.initial_checkedout not in (self.git_proxy.latest_commit, self.branch_name):
+        if self.initial_checkedout not in (self.git_proxy.latest_commit, self.git_proxy.current_branch):
             # need to checkout back
             if self.git_proxy.is_clean:
                 self.git_proxy.ref_checkout(self.initial_checkedout)
             else:
-                print("! Working directory is not clean at time of quiting the branch. Reset or commit changes manually.")
-                raise Warning("Unable to go back to: (previously checkedout state)".format(self.initial_checkedout))
+                print("! Warning ! Working directory is not clean at time of quiting the branch. Reset or commit changes manually.")
+                print("(Unable to go back to previously checkedout state : {})".format(self.initial_checkedout))
     
     def info(self, out=sys.stdout):
         """Write info about the view."""
@@ -473,6 +481,18 @@ class IA4Hview(object):
             raise SyntaxError(" ".join(["Cannot recognize parts in git ref,",
                                         "which syntax must look like one of",
                                         "mary_CY47T1_dev, CY47_t1, CY47T1_r1.04, CY47T1"]))
+    
+    def GCOdb_register(self, start_commit=None):
+        """
+        Register branch in GCO database (proxy to 'git_branch -q -a').
+        """
+        cmd = ['git_branch', '-q', '-a']
+        if start_commit is not None:
+            cmd.append(start_commit)
+        else:
+            start_commit = '?'
+        print("Register branch: '{}' in GCO database, with base commit: '{}'".format(self.git_proxy.current_branch, start_commit))
+        subprocess.check_call(cmd, cwd=self.git_proxy.repository)
     
     # History ------------------------------------------------------------------
     

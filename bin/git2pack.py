@@ -2,69 +2,82 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, absolute_import, unicode_literals, division
 """
-Tools for playing with packs (gmkpack) and Git.
+Make or populate a pack from Git.
 """
+import os
 import argparse
 
 from ia4h_scm.pygmkpack import Pack
-from ia4h_scm.repositories import IA4H_Branch
+from ia4h_scm.repositories import IA4Hview
 from ia4h_scm.algos import IA4H_gitref_to_incrpack, IA4H_gitref_to_main_pack
 
 
-def pack2branch(packname, repository):
-    pack = Pack(packname)
-    branch = pack.save_as_IA4H_Branch(repository,
-                                      branchname=branchname,
-                                      commit_message=commit_message,
-                                      preexisting_branch=preexisting_branch,
-                                      push=push,
-                                      remote=remote)
-    print("!Warning! if files are to be deleted, please do so manually in the branch ('git rm <file>')")
-
-
-def branch2pack(packtype):
-    if packtype == 'incr':
-        IA4H_gitref_to_incrpack(self.repository,
-                                self.git_ref,
-                                self.compiler_label,
-                                packname=self.packname,
-                                compiler_flag=self.compiler_flag,
-                                preexisting_pack=self.preexisting_pack,
-                                clean_if_preexisting=self.cleanpack,
-                                rootpack=self.rootpack,
-                                homepack=self.homepack)
-    elif packtype == 'main':
-        IA4H_gitref_to_main_pack(self.repository,
-                                 self.git_ref,
-                                 self.compiler_label,
-                                 compiler_flag=self.compiler_flag,
-                                 homepack=self.homepack,
-                                 populate_filter_file=self.populate_filter_file,
-                                 link_filter_file=self.link_filter_file)
+DEFAULT_GIT_REPO = os.path.join(os.environ['HOME'], 'git-dev', 'arpifs')
+DEFAULT_COMPILER_FLAG = os.environ.get('GMK_OPT', '2y')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Make or populate a pack from Git.')
-    parser.add_argument('action',
-                        choices=['pack2branch','branch2pack', 'pack_origin'])
-    parser.add_argument('object',
-                        help='branch or pack name')
-    parser.add_argument('-b', '--branch_name',
-                        help='Customized name of the branch to be populated from pack.')
-    parser.add_argument('-t', '--pack_type',
-                        help='Type of pack.',
+    parser.add_argument('git_ref',
+                        help='Git ref: branch or tag.')
+    parser.add_argument('-l', '--compiler_label',
+                        required=True,
+                        help='Compiler label.')
+    parser.add_argument('-o', '--compiler_flag',
+                        help='Compiler flag.',
+                        default=DEFAULT_COMPILER_FLAG)
+    parser.add_argument('-t', '--packtype',
+                        help='Type of pack (default: incr).',
+                        default='incr',
                         choices=['incr', 'main'])
+    parser.add_argument('-e', '--preexisting_pack',
+                        action='store_true',
+                        help='Assume the pack already preexists.',
+                        default=False)
+    parser.add_argument('-c', '--clean_if_preexisting',
+                        action='store_true',
+                        help='Call cleanpack.',
+                        default=False)
     parser.add_argument('-r', '--repository',
-                        default=''
-                        help='')
-    parser.add_argument('-h', '--homepack',
+                        help='Location of the Git repository in which to populate branch (defaults to: {}).'.format(DEFAULT_GIT_REPO),
+                        default=DEFAULT_GIT_REPO)
+    parser.add_argument('--packname',
+                        help='Force pack name (disadvised, and ignored for main packs).',
+                        default='__guess__')
+    parser.add_argument('--populate_filter_file',
+                        help='Filter file (list of files to be filtered) for populate time (defaults from within ia4h_scm package).',
+                        default='__inconfig__')
+    parser.add_argument('--link_filter_file',
+                        help='Filter file (list of files to be filtered) for link time (defaults from within ia4h_scm package).',
+                        default='__inconfig__')
+    parser.add_argument('--homepack',
                         default=None,
                         help='To specify a home directory for packs (defaults to $HOMEPACK or $HOME/pack)')
     parser.add_argument('-f', '--rootpack',
-                        help='')
+                        help="Home of root packs to start from, for incremental packs. Cf. Gmkpack's $ROOTPACK",
+                        default=None)
     args = parser.parse_args()
-
-    print(args.action)
-    #if args.action == 'pack2branch':
-    #    pack2branch()
-
+    
+    assert args.compiler_label not in ('', None), "You must provide a compiler label (option -l or $GMKFILE)."
+    if args.packtype == 'incr':
+        IA4H_gitref_to_incrpack(args.repository,
+                                args.git_ref,
+                                args.compiler_label,
+                                compiler_flag=args.compiler_flag,
+                                packname=args.packname,
+                                preexisting_pack=args.preexisting_pack,
+                                clean_if_preexisting=args.clean_if_preexisting,
+                                homepack=args.homepack,
+                                rootpack=args.rootpack,
+                                silent=False,
+                                ask_confirmation=True)
+    else:
+        IA4H_gitref_to_main_pack(args.repository,
+                                 args.git_ref,
+                                 args.compiler_label,
+                                 compiler_flag=args.compiler_flag,
+                                 homepack=args.homepack,
+                                 populate_filter_file=args.populate_filter_file,
+                                 link_filter_file=args.link_filter_file,
+                                 silent=False,
+                                 ask_confirmation=True)
