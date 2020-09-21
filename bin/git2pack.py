@@ -10,9 +10,9 @@ import argparse
 from ia4h_scm.pygmkpack import Pack
 from ia4h_scm.repositories import IA4Hview
 from ia4h_scm.algos import IA4H_gitref_to_incrpack, IA4H_gitref_to_main_pack
+from ia4h_scm.config import DEFAULT_GIT_REPO
 
 
-DEFAULT_GIT_REPO = os.path.join(os.environ['HOME'], 'git-dev', 'arpifs')
 DEFAULT_COMPILER_FLAG = os.environ.get('GMK_OPT', '2y')
 
 

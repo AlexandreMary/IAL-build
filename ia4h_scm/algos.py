@@ -8,6 +8,7 @@ import six
 import json
 import os
 import copy
+import shutil
 
 from .repositories import IA4Hview
 from .pygmkpack import (Pack, PackError, GmkpackTool,
@@ -41,6 +42,52 @@ def guess_packname(git_ref,
         homepack = GmkpackTool.get_homepack()
     if packtype == 'main':
         ref_split = IA4Hview.split_ref(git_ref)
+        args = GmkpackTool.args_for_main_commandline(ref_split['release'],
+                                                     ref_split['radical'],
+                                                     ref_split['version'],
+                                                     compiler_label,
+                                                     compiler_flag=compiler_flag,
+                                                     prefix=prefix_from_user(ref_split['user']),
+                                                     homepack=homepack)
+        packname = GmkpackTool.args2packname(args, mainpack=(packtype=='main'))
+    elif packtype == 'incr':
+        assert compiler_flag is not None
+        packname = '.'.join([git_ref, compiler_label, compiler_flag])
+    path_elements = [packname]
+    if abspath:
+        path_elements.insert(0, homepack)
+    if to_bin:
+        path_elements.append('bin')
+    return os.path.join(*path_elements)
+
+
+def bundle_guess_packname(bundle,
+                          compiler_label,
+                          packtype,
+                          compiler_flag=None,
+                          abspath=False,
+                          homepack=None,
+                          to_bin=False):
+    """
+    Guess pack name from a number of arguments.
+    
+    :param bundle: bundle file (yaml)
+    :param compiler_label: gmkpack compiler label
+    :param packtype: type of pack, among ('incr', 'main')
+    :param compiler_flag: gmkpack compiler flag
+    :param abspath: True if the absolute path to pack is requested (instead of basename)
+    :param homepack: home of pack
+    :param to_bin: True if the path to binaries subdirectory is requested
+    """
+    if homepack is None:
+        homepack = GmkpackTool.get_homepack()
+    cache_dir, bundle_info = bundle2cache(bundle,
+                                          src_dir=bundle_cache_dir,
+                                          update=update_git_repositories,
+                                          threads=bundle_download_threads,
+                                          dryrun=True)
+    if packtype == 'main':
+        ref_split = IA4Hview.split_ref(bundle_info['arpifs']['version'])
         args = GmkpackTool.args_for_main_commandline(ref_split['release'],
                                                      ref_split['radical'],
                                                      ref_split['version'],
@@ -186,6 +233,7 @@ def IA4H_gitref_to_main_pack(repository,
                                          homepack=homepack,
                                          silent=silent)
         pack.ics_remove('')  # for it to be re-generated at compile time, with proper options
+        pack.populate_hub(view.latest_main_release_ancestor)  # to build hub packages
         pack.populate_from_IA4Hview_as_main(view,
                                             populate_filter_file=populate_filter_file,
                                             link_filter_file=link_filter_file)
@@ -198,6 +246,100 @@ def IA4H_gitref_to_main_pack(repository,
     finally:
         print("-" * 50)
     return pack
+
+
+def bundle_to_main_pack(bundle,
+                        compiler_label,
+                        compiler_flag=None,
+                        bundle_cache_dir=None,
+                        homepack=None,
+                        populate_filter_file='__inconfig__',
+                        link_filter_file='__inconfig__',
+                        silent=False,
+                        update_git_repositories=True,
+                        bundle_download_threads=0):
+    """
+    From bundle to main pack.
+    
+    :param bundle: bundle file (yaml)
+    :param compiler_label: Gmkpack's compiler label to be used
+    :param compiler_flag: Gmkpack's compiler flag to be used
+    :param bundle_cache_dir: cache directory in which to download/update repositories
+    :param homepack: directory in which to build pack
+    :param populate_filter_file: filter file (list of files to be filtered)
+        for populate time (defaults from within ia4h_scm package)
+    :param link_filter_file: filter file (list of files to be filtered)
+        for link time (defaults from within ia4h_scm package)
+    :param silent: to hide gmkpack's stdout
+    :param update_git_repositories: if False, take git repositories as they are,
+        without trying to update (fetch/checkout/pull)
+    :param bundle_download_threads: number of parallel threads to download (clone/fetch) repositories
+    """
+    os.environ['GMK_RELEASE_CASE_SENSITIVE'] = '1'
+    cache_dir, bundle_info = bundle2cache(bundle,
+                                          src_dir=bundle_cache_dir,
+                                          update=update_git_repositories,
+                                          threads=bundle_download_threads)
+    # prepare arguments
+    ref_split = IA4Hview.split_ref(bundle_info['arpifs']['version'])
+    try:
+        # make pack
+        pack = GmkpackTool.new_main_pack(initial_release=ref_split['release'],
+                                         branch_radical=ref_split['radical'],
+                                         version_number=ref_split['version'],
+                                         compiler_label=compiler_label,
+                                         # optional
+                                         compiler_flag=compiler_flag,
+                                         prefix=prefix_from_user(ref_split['user']),
+                                         homepack=homepack,
+                                         silent=silent)
+        pack.ics_remove('')  # for it to be re-generated at compile time, with proper options
+        pack.bundle_populate_mainpack(cache_dir,
+                                      bundle_info,
+                                      populate_filter_file=populate_filter_file,
+                                      link_filter_file=link_filter_file)
+        shutil.copy(bundle, os.path.join(pack.abspath, 'bundle.yml'))
+    except Exception:
+        print("Failed export of bundle to pack !")
+        raise
+    else:
+        print("\nSucessful export of bundle: {} to pack: {}".format(bundle, pack.abspath))
+    finally:
+        print("-" * 50)
+    return pack
+
+
+def bundle2cache(bundle, src_dir=None, update=False, threads=1, no_colour=True,
+                 dryrun=False):
+    """
+    Set repositories defined in **bundle** into bundle cache **src_dir**.
+    
+    :param bundle: bundle file (yaml)
+    :param src_dir: cache directory in which to download/update repositories
+    :param update: if repositories are to be updated/checkedout
+    :param threads: number of threads to do parallel downloads
+    :param no_colour: Disable color output
+    """
+    from ecbundle import BundleDownloader, BundleCreator
+    if src_dir is None:
+        src_dir = os.getcwd()
+    b = BundleDownloader(bundle=bundle,
+                         src_dir=src_dir,
+                         update=update,
+                         threads=threads,
+                         no_colour=no_colour,
+                         dryrun=False,
+                         dry_run=False,
+                         shallow=False,
+                         forced_update=False)
+    if b.download() != 0:
+        raise RuntimeError("Downloading repositories failed.")
+    projects = {}
+    for project in b.bundle().get('projects'):
+        for name, conf in project.items():
+            projects[name] = dict(conf)
+    src_dir = b.src_dir()
+    return src_dir, projects
 
 
 def pack_build_executables(pack,

@@ -12,6 +12,15 @@ import six
 import os
 import shutil
 
+from .config import GMKPACK_HUB_PACKAGES, HPCs
+
+
+def hpc_name():
+    hostname = os.environ['HOSTNAME']
+    for k in HPCs:
+        if hostname.startswith(k):
+            return k
+
 
 def copy_files_in_cwd(list_of_files, originary_directory_abspath):
     """Copy a bunch of files from an originary directory to the cwd."""
@@ -28,7 +37,7 @@ def copy_files_in_cwd(list_of_files, originary_directory_abspath):
 
 class DirectoryFiltering(object):
     
-    def __init__(self, directory_abspath, filter_list):
+    def __init__(self, directory_abspath, filter_list=[]):
         """
         Directory filtering utility.
         

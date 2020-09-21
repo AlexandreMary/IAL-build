@@ -10,9 +10,7 @@ import argparse
 from ia4h_scm.pygmkpack import Pack
 from ia4h_scm.repositories import IA4Hview
 from ia4h_scm.algos import IA4H_gitref_to_incrpack, IA4H_gitref_to_main_pack
-
-
-DEFAULT_GIT_REPO = os.path.join(os.environ['HOME'], 'git-dev', 'arpifs')
+from ia4h_scm.config import DEFAULT_GIT_REPO
 
 
 def pack2git(packname, repository,

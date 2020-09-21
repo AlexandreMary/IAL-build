@@ -29,6 +29,22 @@ USUAL_BINARIES = ['masterodb', 'bator',
                   'oovar', 'ootestvar',
                   ]
 
+# The distinction is based on the component having a build system:
+#         - integrated and plugged in gmkpack: package
+#         - no build system, or not plugged in gmkpack: project
+DEFAULT_COMPONENT_DESTINATION = 'src/local'  # default for following MAP
+COMPONENTS_MAP = {'eckit':'hub/local/src/ecSDK',
+                  'fckit':'hub/local/src/ecSDK',
+                  'ecbuild':'hub/local/src/ecSDK',
+                  # src/local
+                  'arpifs':'src/local',
+                  'ia4h':'src/local',
+                  # __future__
+                  #'atlas':'hub/local/src/Atlas',
+                  #'surfex':'src/local',
+                  #'oops':'src/local'  # ???
+                  }
+
 
 class PackError(Exception):
     pass
@@ -236,7 +252,7 @@ class GmkpackTool(object):
         pack = Pack(packname, preexisting=False, homepack=homepack)
         if os.path.exists(pack.abspath):
             raise PackError('Pack already exists, cannot create: {}'.format(pack.abspath))
-        cls.commandline(args, ['-a'], silent=silent)
+        cls.commandline(args, ['-a', '-K'], silent=silent)
         return pack
 
 
@@ -252,6 +268,7 @@ class Pack(object):
         self.homepack = homepack
         self.abspath = os.path.join(self.homepack, packname)
         self._local = os.path.join(self.abspath, 'src', 'local')
+        self._hub_local_src = os.path.join(self.abspath, 'hub', 'local', 'src')
         self._bin = os.path.join(self.abspath, 'bin')
         if not preexisting and os.path.exists(self.abspath):
             raise PackError("Pack already exists, while *preexisting* is False ({}).".format(self.abspath))
@@ -427,14 +444,13 @@ class Pack(object):
         :param replacement: replacement line
         """
         ics = self._ics_read(program)
-        print("_ics_modify:", pattern)
         for i, line in enumerate(ics):
             try:
                 ok = line == pattern or pattern.match(line)
             except AttributeError:
                 ok = False
             if ok:
-                print(ics[i], '=>', replacement)
+                print("ia4h_scm.pygmkpack.Pack._ics_modify():", ics[i], '=>', replacement)
                 ics[i] = replacement
                 break
         self._ics_write(program, ics)
@@ -484,40 +500,19 @@ class Pack(object):
             filtered at populate time.
             Special values:
             '__inconfig__' will read according file in config of ia4h_scm package;
-            '__inview__' will read according file in Git view
+            '__inrepo__' will read according file in Git repository
         :param link_filter_file: file in which to read the files to be
             filtered at link time.
             Special values:
             '__inconfig__' will read according file in config of ia4h_scm package;
-            '__inview__' will read according file in Git view
+            '__inrepo__' will read according file in Git repository
         """
         from .repositories import IA4Hview
         assert isinstance(view, IA4Hview)
-        pop_filter_list = self._read_filter_list('populate',
-                                                 populate_filter_file,
-                                                 view)
-        for i, f in enumerate(pop_filter_list):
-            if not os.path.isabs(f):
-                pop_filter_list[i] = os.path.join(view.repository, f)
-        print("\nPopulating projects:")
-        print("-" * 22)
-        for f in sorted(os.listdir(view.repository)):
-            f_src = os.path.join(view.repository, f)
-            f_dst = os.path.join(self._local, f)
-            if f_src in pop_filter_list:
-                print("({} is filtered out)".format(f))
-            else:
-                if os.path.isdir(f_src):  # actual project
-                    print(f)
-                    project = DirectoryFiltering(f_src, pop_filter_list)
-                    project.copytree(f_dst, symlinks=True)
-                else:
-                    shutil.copy(f_src, f_dst)  # single file
+        self._populate_main_from_repo(view.repository,
+                                      populate_filter_file=populate_filter_file,
+                                      link_filter_file=link_filter_file)
         self.write_view_info(view)
-        link_filter_list = self._read_filter_list('link',
-                                                  link_filter_file,
-                                                  view)
-        self.set_ignored_files_at_linktime(link_filter_list)
     
     def populate_from_IA4Hview_as_incremental(self, view):
         """
@@ -548,18 +543,38 @@ class Pack(object):
                 raise GitError("Don't know what to do with files which Git status is: " + k)
         self.write_view_info(view)
     
+    def populate_hub(self, latest_main_release):
+        """
+        Populate hub packages in main pack.
+        
+        WARNING: temporary solution before 'bundle' implementation !
+        """
+        from .config import GMKPACK_HUB_PACKAGES
+        from .util import hpc_name
+        msg = "Populating vendor packages in pack's hub:"
+        print(msg + "\n" + "-" * len(msg))
+        for package, properties in GMKPACK_HUB_PACKAGES.items():
+            rootdir = properties[hpc_name()]
+            version = properties[latest_main_release]
+            project = properties['project']
+            print("Package: '{}/{}' (v{}) from {}".format(project, package, version, rootdir))
+            pkg_src = os.path.join(rootdir, package, version)
+            pkg_dst = os.path.join(self._hub_local_src, project, package)
+            shutil.copytree(pkg_src, pkg_dst, symlinks=True)
+        print("-" * len(msg))
+    
     @property
     def origin_filepath(self):
         """File in which to find info about origin of the pack."""
-        return os.path.join(self.abspath, '.pygmkpack.origin')
+        return os.path.join(self.abspath, '.pygmkpack.populated')
 
-    def write_view_info(self, view):
+    def write_view_info(self, view):  # DEPRECATED:migrate to bundle
         """Write view.info into self.origin_filepath."""
         openmode = 'a' if os.path.exists(self.origin_filepath) else 'w'
         with io.open(self.origin_filepath, openmode) as f:
             view.info(out=f)
     
-    def _assert_IA4Hview_compatibility(self, view):
+    def _assert_IA4Hview_compatibility(self, view):  # DEPRECATED:migrate to bundle
         """Assert that view and pack have the same original node (ancestor)."""
         branch_ancestor_info = view.latest_official_branch_from_main_release
         args = self.genesis_arguments
@@ -576,6 +591,130 @@ class Pack(object):
                                                                             args['-v'])
         else:
             assert args['-b'] == 'main'
+
+    # Populate from bundle -----------------------------------------------------
+    
+    def bundle_populate_mainpack(self,
+                                 cache_dir,
+                                 bundle_info,
+                                 populate_filter_file=None,
+                                 link_filter_file=None):
+        """
+        Populate src/local in main pack from bundle.
+        
+        :param cache_dir: directory in which to find the cached bundled repositories.
+        :param bundle_info: a dict(project:{info}}, where {info} is the dict of
+            properties concerning the repository of each component,
+            as read in the bundle file.
+        :param populate_filter_file: file in which to read the files to be
+            filtered at populate time.
+            Special values:
+            '__inconfig__' will read according file in config of ia4h_scm package;
+            '__inrepo__' will read according file in Git repo
+        :param link_filter_file: file in which to read the files to be
+            filtered at link time.
+            Special values:
+            '__inconfig__' will read according file in config of ia4h_scm package;
+            '__inrepo__' will read according file in Git repo
+        """
+        # hub packages
+        self._bundle_populate_hub(cache_dir, bundle_info)
+        # src/local
+        msg = "Populating components in pack's src/local:"
+        print("\n" + msg + "\n" + "-" * len(msg))
+        for component, properties in bundle_info.items():
+            pkg_dst = self._bundle_component_destination(component, properties)
+            if pkg_dst.startswith('src/local'):
+                repository = os.path.join(cache_dir, component)
+                subdir = properties.get('copy_to_subdirectory', None)
+                version = properties['version']
+                remote = properties['git']
+                print("Component: '{}' ({}) from repo: {} via cache: {}".format(component, version, remote, repository))
+                self._populate_main_from_repo(repository,
+                                              subdir=subdir,
+                                              populate_filter_file=populate_filter_file,
+                                              link_filter_file=link_filter_file)
+        # log in pack
+        self._bundle_write_properties(bundle_info)
+    
+    def _bundle_populate_hub(self, cache_dir, bundle_info):
+        """
+        Populate hub packages in main pack from bundle in cache_dir.
+        
+        :param cache_dir: directory in which to find the cached bundled repositories.
+        :param bundle_info: a dict(package:{info}}, where {info} is the dict of
+            properties concerning the repository of each package,
+            as read in the bundle file.
+        """
+        msg = "Populating vendor packages in pack's hub:"
+        print("\n" + msg + "\n" + "-" * len(msg))
+        for package, properties in bundle_info.items():
+            pkg_dst = self._bundle_component_destination(package, properties)
+            if pkg_dst.startswith('hub'):
+                pkg_src = os.path.join(cache_dir, package)
+                pkg_dst = os.path.join(self.abspath, pkg_dst, package)
+                version = properties['version']
+                remote = properties['git']
+                print("Package: '{}' (v{}) from repo: {} via cache: {}".format(package, version, remote, pkg_src))
+                shutil.copytree(pkg_src, pkg_dst, symlinks=True)
+    
+    def _bundle_component_destination(self, component, properties):
+        """
+        Distinction between 'projects' (in src/local) and 'packages' (in hub),
+        as specified in bundle (attribute 'gmkpack') or parameterized.
+        
+        The distinction is based on the component having a build system:
+        - integrated and plugged in gmkpack: package
+        - no build system, or not plugged in gmkpack: project
+        """
+        return properties.get('gmkpack',
+                              COMPONENTS_MAP.get(component.lower(),
+                                                 DEFAULT_COMPONENT_DESTINATION))
+    
+    def _populate_main_from_repo(self,
+                                 repository,
+                                 subdir=None,
+                                 populate_filter_file=None,
+                                 link_filter_file=None):
+        # prepare populate filter
+        pop_filter_list = self._read_filter_list('populate',
+                                                 populate_filter_file,
+                                                 repository)
+        for i, f in enumerate(pop_filter_list):
+            if not os.path.isabs(f):
+                pop_filter_list[i] = os.path.join(repository, f)
+        # populate
+        print("\nSubprojects:")
+        for f in sorted(os.listdir(repository)):
+            f_src = os.path.join(repository, f)
+            if subdir is None:
+                f_dst = os.path.join(self._local, f)
+            else:
+                f_dst = os.path.join(self._local, subdir, f)
+            if f_src in pop_filter_list and os.path.isdir(f_src):
+                print("({} is filtered out)".format(f))
+            else:
+                if os.path.isdir(f_src):  # actual subproject
+                    print(f)
+                    subproject = DirectoryFiltering(f_src, pop_filter_list)
+                    subproject.copytree(f_dst, symlinks=True)
+                else:
+                    shutil.copy(f_src, f_dst)  # single file
+        # link filter
+        link_filter_list = self._read_filter_list('link',
+                                                  link_filter_file,
+                                                  repository)
+        self.set_ignored_files_at_linktime(link_filter_list)
+    
+    def _bundle_write_properties(self, bundle_info):
+        """Write info into self.origin_filepath."""
+        openmode = 'a' if os.path.exists(self.origin_filepath) else 'w'
+        with io.open(self.origin_filepath, openmode) as f:
+            f.write("\n{} --- populate from bundle successful with:\n".format(now()))
+            for component, properties in bundle_info.items():
+                f.write("* {}\n".format(component))
+                f.write("    version: {}\n".format(properties['version']))
+                f.write("    from remote git: {}\n".format(properties['git']))
     
     # Filters ------------------------------------------------------------------
     
@@ -583,7 +722,7 @@ class Pack(object):
         """Get basename of ignore files for a given **step**."""
         return 'pygmkpack.ignore4{}'.format(step)
     
-    def _ignore_filepath4(self, step, where, view):
+    def _ignore_filepath4(self, step, where, repository=None):
         """
         Get filepath of ignore files for a given **step**,
         in 'config' or 'view'.
@@ -594,8 +733,9 @@ class Pack(object):
             filepath = os.path.join(dirpath, basename)
             if not os.path.exists(filepath):
                 basename = self._ignore_basename4(step)
-        elif where == '__inview__':
-            dirpath = view.repository
+        elif where == '__inrepo__':
+            assert repository is not None, "Argument **repository** is required if **where** is '__inrepo__'."
+            dirpath = repository
             basename = self._ignore_basename4(step)
         return os.path.join(dirpath, basename)
     
@@ -604,22 +744,21 @@ class Pack(object):
         """File in which to find the files to be ignored at compilation time."""
         return os.path.join(self.abspath, self._ignore_basename4('compile'))
     
-    def _read_filter_list(self, step, filter_file, view):
+    def _read_filter_list(self, step, filter_file, repository=None):
         """Read filter list from file."""
-        if filter_file in ('__inconfig__', '__inview__'):
-            f = self._ignore_filepath4(step, filter_file, view)
-            print("Read filter file: " + f)
+        if filter_file in ('__inconfig__', '__inrepo__'):
+            f = self._ignore_filepath4(step, filter_file, repository)
             if os.path.exists(f):
                 filter_file = f
             else:
-                print("does not exist ! Ignore.")
+                print("(Filter file '{}' does not exist ! Ignore.)".format(f))
                 filter_file = None
         if filter_file is not None:
             with io.open(filter_file, 'r') as ff:
                 filter_list = [f.strip() for f in ff.readlines()
                                if (not f.startswith('#') and f.strip() != '')]
-            print("\nFiltering for {} time (from {}):".format(step, filter_file))
-            print("-" * 17)
+            print("\nRead filter for {} time from {}:".format(step, filter_file))
+            print("Filter contents:")
             for f in filter_list:
                 print(f)
         else:
@@ -774,9 +913,14 @@ class Pack(object):
                 logdir = os.path.join(self.abspath, 'log')
                 if not os.path.exists(logdir):
                     os.makedirs(logdir)
-                outname = os.path.join(logdir,
-                                       '.'.join([program.lower(),
-                                                 now().stdvortex]))
+                if program == '':
+                    outname = os.path.join(logdir,
+                                           '.'.join(['_',
+                                                     now().stdvortex]))
+                else:
+                    outname = os.path.join(logdir,
+                                           '.'.join([program.lower(),
+                                                     now().stdvortex]))
                 with io.open(outname, 'w') as f:
                     ok = subprocess.check_call(cmd, stdout=f, stderr=f)
             else:
