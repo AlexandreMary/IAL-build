@@ -10,11 +10,10 @@ Configuration parameters.
 
 import os
 
-
 DEFAULT_GIT_REPO = os.environ.get('GIT_HOMEPACK',
                                   os.path.join(os.environ['HOME'], 'git-dev', 'arpifs'))
 
-# temporary => BEFORE IMPLEMENTATION OF BUNDLE
+# temporary => UNTIL USE OF BUNDLE
 _ecSDK_dir = '/home/gmap/mrpe/mary/public/ecSDK'
 GMKPACK_HUB_PACKAGES = {'eckit':{'CY48':'1.4.4',
                                  'belenos':_ecSDK_dir,

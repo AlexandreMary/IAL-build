@@ -8,8 +8,6 @@ import os
 import argparse
 
 from ia4h_scm.pygmkpack import Pack
-from ia4h_scm.repositories import IA4Hview
-from ia4h_scm.algos import IA4H_gitref_to_incrpack, IA4H_gitref_to_main_pack
 from ia4h_scm.config import DEFAULT_GIT_REPO
 
 
@@ -19,7 +17,7 @@ def pack2git(packname, repository,
              homepack=None,
              preexisting_branch=False,
              commit_message=None,
-             register_in_GCOdb=True):
+             register_in_GCOdb=False):
     """
     Create or populate a Git branch from a pack.
     
@@ -61,7 +59,11 @@ if __name__ == '__main__':
                         help='To specify a home directory for packs (defaults to $HOMEPACK or $HOME/pack)')
     parser.add_argument('-g', '--gco',
                         action='store_true',
-                        help='Register branch in GCO database (required to later push/git_post to GCO). REQUIRES git_branch tool from GCO.',
+                        help="""Register branch in GCO database (required to
+                        later push/git_post to GCO).
+                        REQUIRES git_branch tool from GCO.
+                        DO NOT WORK on belenos, so far.
+                        """,
                         default=False)
     args = parser.parse_args()
 
