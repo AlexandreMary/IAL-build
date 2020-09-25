@@ -8,7 +8,7 @@ import os
 import argparse
 
 from ia4h_scm.pygmkpack import Pack
-from ia4h_scm.config import DEFAULT_GIT_REPO
+from ia4h_scm.config import DEFAULT_IA4H_REPO
 
 
 def pack2git(packname, repository,
@@ -42,8 +42,8 @@ if __name__ == '__main__':
                         help='Customized name of the branch to be populated from pack. By default, try to guess from pack.',
                         default=None)
     parser.add_argument('-r', '--repository',
-                        help='Location of the Git repository in which to populate branch (defaults to: {}).'.format(DEFAULT_GIT_REPO),
-                        default=DEFAULT_GIT_REPO)
+                        help='Location of the Git repository in which to populate branch (defaults to: {}).'.format(DEFAULT_IA4H_REPO),
+                        default=DEFAULT_IA4H_REPO)
     parser.add_argument('-d', '--files_to_delete',
                         help='Indicate a file containing the local name of files to be deleted in the repository.',
                         default=[])

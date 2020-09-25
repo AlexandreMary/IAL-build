@@ -7,11 +7,8 @@ Make or populate a pack from Git.
 import os
 import argparse
 
-from ia4h_scm.pygmkpack import Pack
-from ia4h_scm.repositories import IA4Hview
 from ia4h_scm.algos import IA4H_gitref_to_incrpack, IA4H_gitref_to_main_pack
-from ia4h_scm.config import DEFAULT_GIT_REPO
-
+from ia4h_scm.config import DEFAULT_IA4H_REPO
 
 DEFAULT_COMPILER_FLAG = os.environ.get('GMK_OPT', '2y')
 
@@ -39,8 +36,8 @@ if __name__ == '__main__':
                         help='Call cleanpack.',
                         default=False)
     parser.add_argument('-r', '--repository',
-                        help='Location of the Git repository in which to populate branch (defaults to: {}).'.format(DEFAULT_GIT_REPO),
-                        default=DEFAULT_GIT_REPO)
+                        help='Location of the Git repository in which to populate branch (defaults to: {}).'.format(DEFAULT_IA4H_REPO),
+                        default=DEFAULT_IA4H_REPO)
     parser.add_argument('--packname',
                         help='Force pack name (disadvised, and ignored for main packs).',
                         default='__guess__')

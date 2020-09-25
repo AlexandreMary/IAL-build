@@ -808,7 +808,6 @@ class Pack(object):
                             branchname=None,
                             preexisting_branch=False,
                             commit_message=None,
-                            remote=None,
                             ask_confirmation=False,
                             register_in_GCOdb=False):
         """
@@ -822,7 +821,6 @@ class Pack(object):
         :param preexisting_branch: whether the branch already exists in the repository
         :param commit_message: if not None, activate committing the modifications
             after populating the branch with given commit message
-        :param remote: remote repository to be pushed to
         :param ask_confirmation: ask for confirmation about the repo/branch
             before actually creating branch and/or populating
         :param register_in_GCOdb: to register the branch in GCO database
@@ -852,10 +850,11 @@ class Pack(object):
         else:
             print("About to create & populate branch: '{}'".format(branchname))
             print("Starting from tag: {}".format(self.tag_of_latest_official_ancestor))
+            print("In repository: {}".format(repository))
         if commit_message is not None:
             print("And commit with message: '{}'".format(commit_message))
         if ask_confirmation:
-            ok = raw_input("Everything OK ? [y/n] ")
+            ok = six.moves.input("Everything OK ? [y/n] ")
             if ok == 'n':
                 print("Confirmation cancelled: exit.")
                 exit()
@@ -968,7 +967,7 @@ class Pack(object):
     def scanpack(self):
         """List the modified files (present in local directory)."""
         files = [f.strip()
-                 for f in subprocess.check_output(['scanpack'], cwd=self._local).split('\n')
+                 for f in subprocess.check_output(['scanpack'], cwd=self._local).decode('utf-8').split('\n')
                  if f != '']
         return files
     
