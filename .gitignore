@@ -5,3 +5,4 @@ deploy.sh
 .settings
 .project
 .pydevproject
+.idea

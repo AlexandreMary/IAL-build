@@ -111,13 +111,15 @@ def IA4H_gitref_to_incrpack(repository,
                             git_ref,
                             compiler_label,
                             compiler_flag=None,
+                            start_ref=None,
                             packname='__guess__',
                             preexisting_pack=False,
                             clean_if_preexisting=True,
                             homepack=None,
                             rootpack=None,
                             silent=False,
-                            ask_confirmation=False):
+                            ask_confirmation=False,
+                            remove_ics_=True):
     """
     From git ref to incremental pack.
     
@@ -125,6 +127,8 @@ def IA4H_gitref_to_incrpack(repository,
     :param git_ref: Git reference (branch, tag) to be exported
     :param compiler_label: Gmkpack's compiler label to be used
     :param compiler_flag: Gmkpack's compiler flag to be used
+    :param start_ref: increment of modification starts from this ref.
+        If None, starts from latest official tagged ancestor.
     :param packname: name of the pack;
         if '__guess__' (recommended), auto generated;
         if None, defaults to **git_ref**
@@ -135,6 +139,7 @@ def IA4H_gitref_to_incrpack(repository,
     :param silent: to hide gmkpack's stdout
     :param ask_confirmation: ask for confirmation about the pack
         before actually creating pack and populating
+    :param remove_ics_: to remove the ics_ file.
     """
     if packname is None:
         packname = git_ref
@@ -146,7 +151,7 @@ def IA4H_gitref_to_incrpack(repository,
     print("-" * 50)
     print("Start export of git ref: '{}' to incremental pack: '{}'".format(git_ref, packname))
     if ask_confirmation:
-        ok = raw_input("Confirm ? [y/n] ")
+        ok = six.moves.input("Confirm ? [y/n] ")
         if ok == 'n':
             print("Confirmation cancelled: exit.")
             exit()
@@ -160,7 +165,12 @@ def IA4H_gitref_to_incrpack(repository,
             if clean_if_preexisting:
                 pack.cleanpack()
         else:
-            ancestor_info = view.latest_official_branch_from_main_release
+            if start_ref is None:
+                ancestor_info = view.latest_official_branch_from_main_release
+            else:
+                ref_split = view.split_ref(start_ref)
+                ancestor_info = {'b':ref_split['radical'],
+                                 'v':ref_split['version']}
             pack = GmkpackTool.new_incremental_pack(packname,
                                                     compiler_label,
                                                     view.latest_main_release_ancestor,
@@ -170,8 +180,9 @@ def IA4H_gitref_to_incrpack(repository,
                                                     homepack=homepack,
                                                     rootpack=rootpack,
                                                     silent=silent)
-            pack.ics_remove('')  # for it to be re-generated at compile time, with proper options
-        pack.populate_from_IA4Hview_as_incremental(view)
+            if remove_ics_:
+                pack.ics_remove('')  # for it to be re-generated at compile time, with proper options
+        pack.populate_from_IA4Hview_as_incremental(view, start_ref=start_ref)
     except Exception:
         print("Failed export of git ref to pack !")
         del view  # to restore the repository state
@@ -191,7 +202,9 @@ def IA4H_gitref_to_main_pack(repository,
                              populate_filter_file='__inconfig__',
                              link_filter_file='__inconfig__',
                              silent=False,
-                             ask_confirmation=False):
+                             ask_confirmation=False,
+                             prefix='__user__',
+                             remove_ics_=True):
     """
     From git ref to main pack.
     
@@ -207,11 +220,13 @@ def IA4H_gitref_to_main_pack(repository,
     :param silent: to hide gmkpack's stdout
     :param ask_confirmation: ask for confirmation about the pack
         before actually creating pack and populating
+    :param prefix: '__user__' or None.
+    :param remove_ics_: to remove the ics_ file.
     """
     print("-" * 50)
     print("Start export of git ref: '{}' to main pack".format(git_ref))
     if ask_confirmation:
-        ok = raw_input("Confirm ? [y/n] ")
+        ok = six.moves.input("Confirm ? [y/n] ")
         if ok == 'n':
             print("Confirmation cancelled: exit.")
             exit()
@@ -222,6 +237,8 @@ def IA4H_gitref_to_main_pack(repository,
     view = IA4Hview(repository, git_ref)
     # prepare arguments
     ref_split = view.split_ref(git_ref)
+    if prefix == '__user__':
+        prefix = prefix_from_user(ref_split['user'])
     try:
         # make pack
         pack = GmkpackTool.new_main_pack(ref_split['release'],
@@ -229,10 +246,11 @@ def IA4H_gitref_to_main_pack(repository,
                                          ref_split['version'],
                                          compiler_label,
                                          compiler_flag=compiler_flag,
-                                         prefix=prefix_from_user(ref_split['user']),
+                                         prefix=prefix,
                                          homepack=homepack,
                                          silent=silent)
-        pack.ics_remove('')  # for it to be re-generated at compile time, with proper options
+        if remove_ics_:
+            pack.ics_remove('')  # for it to be re-generated at compile time, with proper options
         pack.populate_hub(view.latest_main_release_ancestor)  # to build hub packages
         pack.populate_from_IA4Hview_as_main(view,
                                             populate_filter_file=populate_filter_file,

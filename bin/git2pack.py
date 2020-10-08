@@ -6,9 +6,14 @@ Make or populate a pack from Git.
 """
 import os
 import argparse
+import sys
 
 from ia4h_scm.algos import IA4H_gitref_to_incrpack, IA4H_gitref_to_main_pack
 from ia4h_scm.config import DEFAULT_IA4H_REPO
+
+# Automatically set the python path
+package_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+sys.path.insert(0, package_path)
 
 DEFAULT_COMPILER_FLAG = os.environ.get('GMK_OPT', '2y')
 
@@ -38,9 +43,13 @@ if __name__ == '__main__':
     parser.add_argument('-r', '--repository',
                         help='Location of the Git repository in which to populate branch (defaults to: {}).'.format(DEFAULT_IA4H_REPO),
                         default=DEFAULT_IA4H_REPO)
-    parser.add_argument('--packname',
-                        help='Force pack name (disadvised, and ignored for main packs).',
-                        default='__guess__')
+    name = parser.add_mutually_exclusive_group()
+    name.add_argument('--packname',
+                      help='Force pack name (disadvised, and ignored for main packs).',
+                      default='__guess__')
+    name.add_argument('--prefix',
+                      help='Force prefix (before release) in pack name. Main packs only. Defaults to user from git_ref. "" for no prefix',
+                      default='__user__')
     parser.add_argument('--populate_filter_file',
                         help='Filter file (list of files to be filtered) for populate time (defaults from within ia4h_scm package).',
                         default='__inconfig__')
@@ -57,6 +66,8 @@ if __name__ == '__main__':
     
     assert args.compiler_label not in ('', None), "You must provide a compiler label (option -l or $GMKFILE)."
     if args.packtype == 'incr':
+        if args.prefix != '__user__':
+            print("Main pack: argument --prefix ignored.")
         IA4H_gitref_to_incrpack(args.repository,
                                 args.git_ref,
                                 args.compiler_label,
@@ -67,8 +78,11 @@ if __name__ == '__main__':
                                 homepack=args.homepack,
                                 rootpack=args.rootpack,
                                 silent=False,
-                                ask_confirmation=True)
+                                ask_confirmation=True,
+                                remove_ics_=False)
     else:
+        if args.packname != '__guess__':
+            print("Main pack: argument --packname ignored.")
         IA4H_gitref_to_main_pack(args.repository,
                                  args.git_ref,
                                  args.compiler_label,
@@ -77,4 +91,6 @@ if __name__ == '__main__':
                                  populate_filter_file=args.populate_filter_file,
                                  link_filter_file=args.link_filter_file,
                                  silent=False,
-                                 ask_confirmation=True)
+                                 ask_confirmation=True,
+                                 prefix=args.prefix,
+                                 remove_ics_=False)

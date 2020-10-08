@@ -21,7 +21,7 @@ class GitProxy(object):
     def __init__(self, repository='.'):
         self.repository = os.path.abspath(repository)
         assert os.path.exists(os.path.join(self.repository, '.git')), \
-            "There is no **repository** in here: {}".format(self.repository)
+            "This is not a Git **repository** : {}".format(self.repository)
         print('using ' + self._git_cmd(['git', 'version'])[0])
     
     @contextmanager
@@ -425,13 +425,16 @@ class IA4Hview(object):
             self.git_proxy.pull(remote=remote)
     
     def __del__(self):
-        if self.initial_checkedout not in (self.git_proxy.latest_commit, self.git_proxy.current_branch):
-            # need to checkout back
-            if self.git_proxy.is_clean:
-                self.git_proxy.ref_checkout(self.initial_checkedout)
-            else:
-                print("! Warning ! Working directory is not clean at time of quiting the branch. Reset or commit changes manually.")
-                print("(Unable to go back to previously checkedout state : {})".format(self.initial_checkedout))
+        try:
+            if self.initial_checkedout not in (self.git_proxy.latest_commit, self.git_proxy.current_branch):
+                # need to checkout back
+                if self.git_proxy.is_clean:
+                    self.git_proxy.ref_checkout(self.initial_checkedout)
+                else:
+                    print("! Warning ! Working directory is not clean at time of quiting the branch. Reset or commit changes manually.")
+                    print("(Unable to go back to previously checkedout state : {})".format(self.initial_checkedout))
+        except Exception:
+            pass
     
     def info(self, out=sys.stdout):
         """Write info about the view."""
@@ -534,8 +537,6 @@ class IA4Hview(object):
         return self._re_official_tags.match(latest_official_tagged_ancestor).groupdict()
     
     # Content ------------------------------------------------------------------
-    # TODO: export full sources (main pack)
-
     def touched_files_since(self, ref):
         """Lists touched files since **ref** (commit or tag)."""
         uncommitted = self.git_proxy.touched_since_last_commit

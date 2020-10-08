@@ -14,7 +14,6 @@ import io
 import shutil
 from contextlib import contextmanager
 
-from bronx.system.unistd import stdout_redirected, stderr_redirected
 from bronx.stdtypes.date import now
 
 from .util import DirectoryFiltering, copy_files_in_cwd
@@ -93,7 +92,7 @@ class GmkpackTool(object):
     def get_rootpack():
         """Get a ROOTPACK directory from $ROOTPACK if defined, or None."""
         rootpack = os.environ.get('ROOTPACK')
-        return rootpack if rootpack == '' else None
+        return rootpack if rootpack != '' else None
     
     @staticmethod
     def build_packname(args, mainpack):
@@ -216,6 +215,7 @@ class GmkpackTool(object):
                                                     compiler_flag=compiler_flag,
                                                     rootpack=rootpack,
                                                     homepack=homepack)
+        print(args)
         cls.commandline(args, silent=silent)
         return pack
     
@@ -514,16 +514,21 @@ class Pack(object):
                                       link_filter_file=link_filter_file)
         self.write_view_info(view)
     
-    def populate_from_IA4Hview_as_incremental(self, view):
+    def populate_from_IA4Hview_as_incremental(self, view, start_ref=None):
         """
         Populate as incremental pack with contents from a IA4Hview.
         
         :param view: a IA4Hview instance
+        :param start_ref: increment of modification starts from this ref.
+            If None, starts from latest official tagged ancestor.
         """
         from .repositories import IA4Hview, GitError
         assert isinstance(view, IA4Hview)
-        self._assert_IA4Hview_compatibility(view)
-        touched_files = view.touched_files_since_latest_official_tagged_ancestor
+        if start_ref is None:
+            self._assert_IA4Hview_compatibility(view)
+            touched_files = view.touched_files_since_latest_official_tagged_ancestor
+        else:
+            touched_files = view.touched_files_since(start_ref)
         if len(view.git_proxy.touched_since_last_commit) > 0:
             print("! Note:  non-committed files in the view are exported to the pack.")
         # files to be copied
@@ -581,7 +586,7 @@ class Pack(object):
         pack_release = self.release
         assert branch_ancestor_info['r'] == pack_release, \
             "release: (view)={} vs. (pack)={}".format(branch_ancestor_info['r'],
-                                                        pack_release)
+                                                      pack_release)
         if branch_ancestor_info['b'] is not None:
             assert branch_ancestor_info['b'] == args['-b'], \
                 "official view: (view)={} vs. (pack)={}".format(branch_ancestor_info['b'],
