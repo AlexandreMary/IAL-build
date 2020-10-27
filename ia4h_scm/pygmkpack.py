@@ -56,7 +56,14 @@ class GmkpackTool(object):
     _default_compiler_flag = '2y'
 
     @staticmethod
-    def commandline(arguments,
+    def clean_env():
+        k = 'GMK_USER_PACKNAME_STYLE'
+        if k in os.environ:
+            del os.environ[k]
+
+    @classmethod
+    def commandline(cls,
+                    arguments,
                     options=[],
                     silent=False):
         """
@@ -68,6 +75,7 @@ class GmkpackTool(object):
             to be passed as a list, e.g. ['-a'] 
         :param silent: if True, hide gmkpack's stdout/stderr output
         """
+        cls.clean_env()
         arguments_as_list = []
         for k, v in arguments.items():
             arguments_as_list.extend([k, v])
@@ -427,7 +435,7 @@ class Pack(object):
 
     def _ics_read(self, program):
         with io.open(self.ics_path_for(program), 'r') as f:
-            ics = [line.strip() for line in f.readlines()]
+            ics = [line.rstrip() for line in f.readlines()]
         return ics
     
     def _ics_write(self, program, ics):
