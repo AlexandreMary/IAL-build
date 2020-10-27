@@ -355,8 +355,8 @@ class Pack(object):
         return os.path.exists(self.ics_path_for(program))
     
     def ics_build_for(self, program, silent=False,
-                      GMK_THREADS=16,
-                      Ofrt=2,
+                      GMK_THREADS=32,
+                      Ofrt=4,
                       partition=None,
                       no_compilation=False,
                       no_libs_update=False):
