@@ -8,12 +8,12 @@ import os
 import argparse
 import sys
 
-from ia4h_scm.algos import IA4H_gitref_to_incrpack, IA4H_gitref_to_main_pack
-from ia4h_scm.config import DEFAULT_IA4H_REPO
-
 # Automatically set the python path
 package_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 sys.path.insert(0, package_path)
+
+from ia4h_scm.algos import IA4H_gitref_to_incrpack, IA4H_gitref_to_main_pack
+from ia4h_scm.config import DEFAULT_IA4H_REPO
 
 DEFAULT_COMPILER_FLAG = os.environ.get('GMK_OPT', '2y')
 
