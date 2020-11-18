@@ -10,10 +10,10 @@ Configuration parameters.
 
 import os
 
-DEFAULT_IA4H_REPO = os.path.join(os.environ.get('GIT_HOMEPACK',
-                                                os.path.join(os.environ['HOME'],
-                                                             'repositories')),
-                                                'IA4H')
+DEFAULT_IA4H_REPO = os.environ.get('DEFAULT_IA4H_REPO')
+if DEFAULT_IA4H_REPO in ('', None):
+    GIT_HOMEPACK = os.environ.get('GIT_HOMEPACK', os.path.join(os.environ['HOME'], 'repositories'))
+    DEFAULT_IA4H_REPO = os.path.join(GIT_HOMEPACK, 'IA4H')
 
 # temporary => UNTIL USE OF BUNDLE
 _ecSDK_dir = '/home/gmap/mrpe/mary/public/ecSDK'
