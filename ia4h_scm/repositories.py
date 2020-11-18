@@ -354,14 +354,14 @@ class IA4Hview(object):
     _re_official_tags = re.compile('(?P<r>CY\d{2}((T|R)\d)?)(_(?P<b>.+)\.(?P<v>\d+))?$')
     
     def __init__(self, repository, ref,
-                 remote=None,
+                 remote='origin',
                  new_branch=False,
                  start_ref=None,
                  register_in_GCOdb=False):
         """
         Hold **ref** from **repository**.
 
-        :param remote: fetch/pull ref from a remote
+        :param remote: fetch ref from a remote
         :param new_branch: if the **ref** is a new branch to be created
         :param start_ref: start reference, in case a new branch to be created
         :param register_in_GCOdb: register branch in GCO database.
@@ -421,8 +421,8 @@ class IA4Hview(object):
         # set branch name
         self.branch_name = self.git_proxy.current_branch
         # remote-tracking branch: update
-        if self.git_proxy.current_branch_is_tracking(only_remote=remote) is not None:
-            self.git_proxy.pull(remote=remote)
+        #if self.git_proxy.current_branch_is_tracking(only_remote=remote) is not None:
+        #    self.git_proxy.pull(remote=remote)  # TODO: CLEANME: pull is dangerous
     
     def __del__(self):
         try:
