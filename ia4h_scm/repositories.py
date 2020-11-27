@@ -332,6 +332,7 @@ class GitProxy(object):
         """
         if common_ancestor is None:
             common_ancestor = self.refs_common_ancestor(contrib_ref, target_ref)
+            print('Auto-determined common ancestor: {}'.format(common_ancestor))
         touched_in_contrib = self.touched_between(common_ancestor, contrib_ref)
         touched_in_target = self.touched_between(common_ancestor, target_ref)
         potential_conflicts = {'{}/{}'.format(kc, kt):[]
@@ -358,9 +359,11 @@ class GitProxy(object):
                         for ft in touched_in_target[kt]:
                             if not set(fc).isdisjoint(set(ft)):
                                 potential_conflicts[conflict_key].append((fc, ft))
-        for k in potential_conflicts.keys():
+        for k in list(potential_conflicts.keys()):
             if len(potential_conflicts[k]) == 0:
                 potential_conflicts.pop(k)
+            else:
+                potential_conflicts[k] = sorted(potential_conflicts[k])
         return potential_conflicts
 
     def stage(self, filenames):
