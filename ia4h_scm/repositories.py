@@ -320,7 +320,49 @@ class GitProxy(object):
             if len(asdict[k]) == 0:
                 asdict.pop(k)
         return asdict
-    
+
+    def preview_merge(self, contrib_ref, target_ref, common_ancestor=None):
+        """
+        Preview a merge potential conflicts.
+
+        :param contrib_ref: reference (branch name) of the contribution to be merged
+        :param target_ref: reference (tag, branch) of the target branch in which to merge the contribution
+        :param common_ancestor: common ancestor to the *contribution* branch
+            and the *target* branch.
+        """
+        if common_ancestor is None:
+            common_ancestor = self.refs_common_ancestor(contrib_ref, target_ref)
+        touched_in_contrib = self.touched_between(common_ancestor, contrib_ref)
+        touched_in_target = self.touched_between(common_ancestor, target_ref)
+        potential_conflicts = {'{}/{}'.format(kc, kt):[]
+                               for kc in touched_in_contrib.keys()
+                               for kt in touched_in_target.keys()}
+        for kc in touched_in_contrib.keys():
+            for kt in touched_in_target.keys():
+                conflict_key = '{}/{}'.format(kc, kt)
+                if kc in ('A', 'M', 'T', 'D') and kt in ('A', 'M', 'T', 'D'):
+                    for f in touched_in_contrib[kc]:
+                        if f in touched_in_target[kt]:
+                            potential_conflicts[conflict_key].append(f)
+                elif kc in ('A', 'M', 'T', 'D') and kt in ('C', 'R'):
+                    for fc in touched_in_contrib[kc]:
+                        for ft in touched_in_target[kt]:
+                            if fc in ft:
+                                potential_conflicts[conflict_key].append((fc, ft))
+                elif kc in ('C', 'R') and kt in ('A', 'M', 'T', 'D'):
+                    for fc in touched_in_contrib[kc]:
+                        if fc[0] in touched_in_target or fc[0] in touched_in_target:
+                            potential_conflicts[conflict_key].append((fc, ft))
+                elif kc in ('C', 'R') and kt in ('C', 'R'):
+                    for fc in touched_in_contrib[kc]:
+                        for ft in touched_in_target[kt]:
+                            if not set(fc).isdisjoint(set(ft)):
+                                potential_conflicts[conflict_key].append((fc, ft))
+        for k in potential_conflicts.keys():
+            if len(potential_conflicts[k]) == 0:
+                potential_conflicts.pop(k)
+        return potential_conflicts
+
     def stage(self, filenames):
         """
         Add file(s) to stage.

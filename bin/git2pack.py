@@ -67,7 +67,7 @@ if __name__ == '__main__':
     assert args.compiler_label not in ('', None), "You must provide a compiler label (option -l or $GMKFILE)."
     if args.packtype == 'incr':
         if args.prefix != '__user__':
-            print("Main pack: argument --prefix ignored.")
+            print("Incr pack: argument --prefix ignored.")
         IA4H_gitref_to_incrpack(args.repository,
                                 args.git_ref,
                                 args.compiler_label,
