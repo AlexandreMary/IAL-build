@@ -29,14 +29,17 @@ def main(contrib_ref, target_ref,
          repository='.'):
     g = GitProxy(repository)
     potential_conflicts = g.preview_merge(contrib_ref, target_ref, common_ancestor=common_ancestor)
-    for conflict_type, files in potential_conflicts.items():
-        legend = '{} in contrib / {} in target:'.format(conflicts_types_legend[conflict_type[0]],
-                                                        conflicts_types_legend[conflict_type[2]])
-        print("")
-        print(legend)
-        print("-" * len(legend))
-        for f in files:
-            print("  {}".format(f))
+    if len(potential_conflicts) > 0:
+        for conflict_type, files in potential_conflicts.items():
+            legend = '{} in contrib / {} in target:'.format(conflicts_types_legend[conflict_type[0]],
+                                                            conflicts_types_legend[conflict_type[2]])
+            print("")
+            print(legend)
+            print("-" * len(legend))
+            for f in files:
+                print("  {}".format(f))
+    else:
+        print("Nothing seems conflicting !")
 
 
 if __name__ == '__main__':
