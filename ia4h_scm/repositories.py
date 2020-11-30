@@ -402,7 +402,8 @@ class IA4Hview(object):
                  remote='origin',
                  new_branch=False,
                  start_ref=None,
-                 register_in_GCOdb=False):
+                 register_in_GCOdb=False,
+                 fetch=False):
         """
         Hold **ref** from **repository**.
 
@@ -410,12 +411,14 @@ class IA4Hview(object):
         :param new_branch: if the **ref** is a new branch to be created
         :param start_ref: start reference, in case a new branch to be created
         :param register_in_GCOdb: register branch in GCO database.
+        :param fetch: to fetch branch on remote or not
         """
         self.repository = os.path.abspath(repository)
         self.ref = ref
         self.git_proxy = GitProxy(self.repository)
-        self.git_proxy.fetch(remote=remote,
-                             ref=ref if remote is not None else None)
+        if fetch:
+            self.git_proxy.fetch(remote=remote,
+                                 ref=ref if remote is not None else None)
         # initial state (to get back at the end)
         current_branch = self.git_proxy.current_branch
         if current_branch == '(no branch)':  # detached HEAD state

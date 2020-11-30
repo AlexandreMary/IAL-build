@@ -119,7 +119,8 @@ def IA4H_gitref_to_incrpack(repository,
                             rootpack=None,
                             silent=False,
                             ask_confirmation=False,
-                            remove_ics_=True):
+                            remove_ics_=True,
+                            fetch=False):
     """
     From git ref to incremental pack.
     
@@ -140,6 +141,7 @@ def IA4H_gitref_to_incrpack(repository,
     :param ask_confirmation: ask for confirmation about the pack
         before actually creating pack and populating
     :param remove_ics_: to remove the ics_ file.
+    :param fetch: to fetch branch on remote or not
     """
     if packname is None:
         packname = git_ref
@@ -158,7 +160,7 @@ def IA4H_gitref_to_incrpack(repository,
         elif ok != 'y':
             print("Please answer by 'y' or 'n'. Exit.")
             exit()
-    view = IA4Hview(repository, git_ref)
+    view = IA4Hview(repository, git_ref, fetch=fetch)
     try:
         if preexisting_pack:
             pack = Pack(packname, preexisting=preexisting_pack, homepack=homepack)
@@ -204,7 +206,8 @@ def IA4H_gitref_to_main_pack(repository,
                              silent=False,
                              ask_confirmation=False,
                              prefix='__user__',
-                             remove_ics_=True):
+                             remove_ics_=True,
+                             fetch=False):
     """
     From git ref to main pack.
     
@@ -222,6 +225,7 @@ def IA4H_gitref_to_main_pack(repository,
         before actually creating pack and populating
     :param prefix: '__user__' or None.
     :param remove_ics_: to remove the ics_ file.
+    :param fetch: to fetch branch on remote or not
     """
     print("-" * 50)
     print("Start export of git ref: '{}' to main pack".format(git_ref))
@@ -234,7 +238,7 @@ def IA4H_gitref_to_main_pack(repository,
             print("Please answer by 'y' or 'n'. Exit.")
             exit()
     os.environ['GMK_RELEASE_CASE_SENSITIVE'] = '1'
-    view = IA4Hview(repository, git_ref)
+    view = IA4Hview(repository, git_ref, fetch=fetch)
     # prepare arguments
     ref_split = view.split_ref(git_ref)
     if prefix == '__user__':

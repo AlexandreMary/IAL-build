@@ -25,6 +25,10 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--compiler_label',
                         required=True,
                         help='Compiler label.')
+    parser.add_argument('--fetch',
+                        help='Fetch remote beforehand.',
+                        action='store_true',
+                        default=False)
     parser.add_argument('-o', '--compiler_flag',
                         help='Compiler flag.',
                         default=DEFAULT_COMPILER_FLAG)
@@ -79,7 +83,8 @@ if __name__ == '__main__':
                                 rootpack=args.rootpack,
                                 silent=False,
                                 ask_confirmation=True,
-                                remove_ics_=False)
+                                remove_ics_=False,
+                                fetch=args.fetch)
     else:
         if args.packname != '__guess__':
             print("Main pack: argument --packname ignored.")
@@ -93,4 +98,5 @@ if __name__ == '__main__':
                                  silent=False,
                                  ask_confirmation=True,
                                  prefix=args.prefix,
-                                 remove_ics_=False)
+                                 remove_ics_=False,
+                                 fetch=args.fetch)
