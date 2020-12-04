@@ -40,6 +40,9 @@ if __name__ == '__main__':
                         action='store_true',
                         help='Assume the pack already preexists.',
                         default=False)
+    parser.add_argument('--start_ref',
+                        help='Specify a Git reference, from which increment of modifications starts. Use with precaution !.',
+                        default=None)
     parser.add_argument('-c', '--clean_if_preexisting',
                         action='store_true',
                         help='Call cleanpack.',
@@ -84,7 +87,8 @@ if __name__ == '__main__':
                                 silent=False,
                                 ask_confirmation=True,
                                 remove_ics_=False,
-                                fetch=args.fetch)
+                                fetch=args.fetch,
+                                start_ref=args.start_ref)
     else:
         if args.packname != '__guess__':
             print("Main pack: argument --packname ignored.")
