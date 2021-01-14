@@ -9,6 +9,7 @@ import subprocess
 import os
 import re
 import sys
+import io
 from contextlib import contextmanager
 
 
@@ -605,3 +606,37 @@ class IA4Hview(object):
     def touched_files_since_latest_official_tagged_ancestor(self):
         """Lists touched files since *self.latest_official_tagged_ancestor*."""
         return self.touched_files_since(self.latest_official_tagged_ancestor)
+
+    def prep_doc(self, outdir, start_ref=None):
+        """
+        Pre-fill branch doc template.
+
+        :param outdir: output directory for the doc file
+        :param start_ref: starting reference to collect branch deltas
+        """
+        template_file = os.path.join(os.path.dirname(__file__), 'config', 'doc_template.tex')
+        with io.open(template_file, 'r') as t:
+            template = [l.strip() for l in t.readlines()]
+        if start_ref is None:
+            start_ref = self.latest_official_tagged_ancestor
+        # Set branch
+        for i, line in enumerate(template):
+            line = line.replace('__branch_protected_underscores__',
+                                self.branch_name.replace('_', '\_'))
+            line = line.replace('__branch__', self.branch_name)
+            line = line.replace('__start_ref__', start_ref)
+            template[i] = line
+        # Set contents
+        touched = self.touched_files_since(start_ref)
+        contents = []
+        for k, files in touched.items():
+            for f in files:
+                contents.append('{}    {}'.format(k, f))
+        index0 = template.index('__as returned by: git diff --name-status__')
+        del template[index0]
+        for f in sorted(contents, reverse=True):
+            template.insert(index0, f)
+        outfile = os.path.join(outdir, self.branch_name + '.tex')
+        with io.open(outfile, 'w') as out:
+            out.writelines([l + '\n' for l in template])
+        print("Output written in: {}".format(outfile))
