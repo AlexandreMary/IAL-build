@@ -273,7 +273,15 @@ class GitProxy(object):
         return self._git_cmd(git_cmd)[0]
     
     # Content ------------------------------------------------------------------
-    
+
+    def log(self, n=1, log_args=[]):
+        """Call `git log -n`"""
+        git_cmd = ['git', 'log', '-{}'.format(n)] + log_args
+        print('-' * 50)
+        for out in self._git_cmd(git_cmd):
+            print(out)
+        print('-' * 50)
+
     def touched_between(self, start_ref, end_ref):
         """
         Return the lists of Added, Modified, Deleted, Renamed (etc...) files
@@ -619,12 +627,13 @@ class IA4Hview(object):
             template = [l.strip() for l in t.readlines()]
         if start_ref is None:
             start_ref = self.latest_official_tagged_ancestor
+        print("Start ref:", start_ref)
         # Set branch
         for i, line in enumerate(template):
             line = line.replace('__branch_protected_underscores__',
                                 self.branch_name.replace('_', '\_'))
             line = line.replace('__branch__', self.branch_name)
-            line = line.replace('__start_ref__', start_ref)
+            line = line.replace('__start_ref__', start_ref.replace('_', '\_'))
             template[i] = line
         # Set contents
         touched = self.touched_files_since(start_ref)
