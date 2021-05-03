@@ -563,11 +563,11 @@ class Pack(object):
         WARNING: temporary solution before 'bundle' implementation !
         """
         from .config import GMKPACK_HUB_PACKAGES
-        from .util import hpc_name
+        from .util import host_name
         msg = "Populating vendor packages in pack's hub:"
         print(msg + "\n" + "-" * len(msg))
         for package, properties in GMKPACK_HUB_PACKAGES.items():
-            rootdir = properties[hpc_name()]
+            rootdir = properties[host_name()]
             version = properties[latest_main_release]
             project = properties['project']
             print("Package: '{}/{}' (v{}) from {}".format(project, package, version, rootdir))

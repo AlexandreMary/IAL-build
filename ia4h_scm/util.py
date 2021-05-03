@@ -11,15 +11,16 @@ Utilities for IA4H source code management.
 import six
 import os
 import shutil
+import socket
 
-from .config import GMKPACK_HUB_PACKAGES, HPCs
+from .config import GMKPACK_HUB_PACKAGES, hosts_re
 
 
-def hpc_name():
-    hostname = os.environ['HOSTNAME']
-    for k in HPCs:
-        if hostname.startswith(k):
-            return k
+def host_name():
+    socket_hostname = socket.gethostname()
+    for host, pattern in hosts_re.items():
+        if pattern.match(socket_hostname):
+            return host
 
 
 def copy_files_in_cwd(list_of_files, originary_directory_abspath):

@@ -9,6 +9,7 @@ Configuration parameters.
 """
 
 import os
+import re
 
 DEFAULT_IA4H_REPO = os.environ.get('DEFAULT_IA4H_REPO')
 if DEFAULT_IA4H_REPO in ('', None):
@@ -16,18 +17,24 @@ if DEFAULT_IA4H_REPO in ('', None):
     DEFAULT_IA4H_REPO = os.path.join(GIT_HOMEPACK, 'IA4H')
 
 # temporary => UNTIL USE OF BUNDLE
-_ecSDK_dir = '/home/gmap/mrpe/mary/public/ecSDK'
+_ecSDK_dir = {'belenos':'/home/gmap/mrpe/mary/public/ecSDK',
+              'taranis':'/home/gmap/mrpe/mary/public/ecSDK',
+              'lxcnrm':'/home/common/epygram/public/ecSDK',
+              }
 GMKPACK_HUB_PACKAGES = {'eckit':{'CY48':'1.4.4',
-                                 'belenos':_ecSDK_dir,
-                                 'beaufix':_ecSDK_dir,
+                                 'CY46T1':'1.4.4',
                                  'project':'ecSDK'},
                         'fckit':{'CY48':'0.6.4',
-                                 'belenos':_ecSDK_dir,
-                                 'beaufix':_ecSDK_dir,
+                                 'CY46T1':'0.6.4',
                                  'project':'ecSDK'},
                         'ecbuild':{'CY48':'3.1.0',
-                                   'belenos':_ecSDK_dir,
-                                   'beaufix':_ecSDK_dir,
+                                   'CY46T1':'3.1.0',
                                    'project':'ecSDK'}
                         }
-HPCs = ('beaufix', 'belenos')
+for p in GMKPACK_HUB_PACKAGES.keys():
+    GMKPACK_HUB_PACKAGES[p].update(**_ecSDK_dir)
+hosts_re = {
+    'belenos':re.compile('^belenoslogin\d\.belenoshpc\.meteo\.fr$'),
+    'taranis':re.compile('^taranislogin\d\.belenoshpc\.meteo\.fr$'),
+    'lxcnrm':re.compile('^[pls]x[a-z]+\d{1,2}$')
+    }
