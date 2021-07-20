@@ -122,7 +122,7 @@ class GmkpackTool(object):
                                          rootpack=None,
                                          homepack=None):
         """Build the dict associating arguments to commandline."""
-        args = {'-r':initial_release.lower().replace('cy', ''),
+        args = {'-r':initial_release.replace('cy', '').replace('CY', ''),
                 '-l':compiler_label,
                 '-u':packname}
         if initial_branch is not None:
@@ -141,6 +141,7 @@ class GmkpackTool(object):
         if rootpack == GCO_ROOTPACK:
             args['-g'] = 'cy'
             args['-e'] = '.pack'
+            args['-r'] = args['-r'].lower()
         if homepack in (None, ''):
             homepack = cls.get_homepack()
         args['-h'] = homepack
