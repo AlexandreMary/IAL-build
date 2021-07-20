@@ -160,6 +160,7 @@ def IA4H_gitref_to_incrpack(repository,
         elif ok != 'y':
             print("Please answer by 'y' or 'n'. Exit.")
             exit()
+    os.environ['GMK_RELEASE_CASE_SENSITIVE'] = '1'
     view = IA4Hview(repository, git_ref, fetch=fetch)
     try:
         if preexisting_pack:
