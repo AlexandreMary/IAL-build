@@ -12,7 +12,7 @@ import sys
 package_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 sys.path.insert(0, package_path)
 
-from ia4h_scm.repositories import IA4Hview
+from ial_build.repositories import IA4Hview
 
 
 def main(contrib_ref, start_ref, outdir,

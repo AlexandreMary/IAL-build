@@ -12,7 +12,7 @@ import sys
 package_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 sys.path.insert(0, package_path)
 
-from ia4h_scm.repositories import GitProxy
+from ial_build.repositories import GitProxy
 
 conflicts_types_legend = {
     'M':'MODIFIED',

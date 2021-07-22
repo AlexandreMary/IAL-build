@@ -12,8 +12,8 @@ import sys
 package_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 sys.path.insert(0, package_path)
 
-from ia4h_scm.pygmkpack import Pack
-from ia4h_scm.config import DEFAULT_IA4H_REPO
+from ial_build.pygmkpack import Pack
+from ial_build.config import DEFAULT_IA4H_REPO
 
 
 def pack2git(packname, repository,
@@ -26,8 +26,8 @@ def pack2git(packname, repository,
     """
     Create or populate a Git branch from a pack.
     
-    For arguments, cf. ia4h_scm.pygmkpack.Pack()
-    and ia4h_scm.pygmkpack.Pack.save_as_IA4H_branch()
+    For arguments, cf. ial_build.pygmkpack.Pack()
+    and ial_build.pygmkpack.Pack.save_as_IA4H_branch()
     """
     pack = Pack(packname, homepack=homepack)
     branch = pack.save_as_IA4H_branch(repository,

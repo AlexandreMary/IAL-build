@@ -12,8 +12,8 @@ import sys
 package_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 sys.path.insert(0, package_path)
 
-from ia4h_scm.algos import IA4H_gitref_to_incrpack, IA4H_gitref_to_main_pack
-from ia4h_scm.config import DEFAULT_IA4H_REPO
+from ial_build.algos import IA4H_gitref_to_incrpack, IA4H_gitref_to_main_pack
+from ial_build.config import DEFAULT_IA4H_REPO
 
 DEFAULT_COMPILER_FLAG = os.environ.get('GMK_OPT', '2y')
 
@@ -58,10 +58,10 @@ if __name__ == '__main__':
                       help='Force prefix (before release) in pack name. Main packs only. Defaults to user from git_ref. "" for no prefix',
                       default='__user__')
     parser.add_argument('--populate_filter_file',
-                        help='Filter file (list of files to be filtered) for populate time (defaults from within ia4h_scm package).',
+                        help='Filter file (list of files to be filtered) for populate time (defaults from within ial_build package).',
                         default='__inconfig__')
     parser.add_argument('--link_filter_file',
-                        help='Filter file (list of files to be filtered) for link time (defaults from within ia4h_scm package).',
+                        help='Filter file (list of files to be filtered) for link time (defaults from within ial_build package).',
                         default='__inconfig__')
     parser.add_argument('--homepack',
                         default=None,
@@ -70,7 +70,7 @@ if __name__ == '__main__':
                         help="Home of root packs to start from, for incremental packs. Cf. Gmkpack's $ROOTPACK",
                         default=None)
     args = parser.parse_args()
-    
+
     assert args.compiler_label not in ('', None), "You must provide a compiler label (option -l or $GMKFILE)."
     if args.packtype == 'incr':
         if args.prefix != '__user__':

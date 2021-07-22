@@ -7,7 +7,7 @@
 from __future__ import print_function, absolute_import, unicode_literals, division
 
 """
-IA4H (IFS-ARPEGE-ALADIN-AROME-ALARO-HARMONIE) source code management.
+IAL (IFS-ARPEGE & LAM:ALADIN-AROME-ALARO-HARMONIE) source code management.
 """
 
-__version__ = '1.0.6'
+__version__ = '1.0.7'

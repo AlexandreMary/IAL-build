@@ -5,7 +5,7 @@
 # http://www.cecill.info
 from __future__ import print_function, absolute_import, unicode_literals, division
 """
-Utilities for IA4H source code management.
+Utilities for IAL source code management.
 """
 
 import six
@@ -37,11 +37,11 @@ def copy_files_in_cwd(list_of_files, originary_directory_abspath):
 
 
 class DirectoryFiltering(object):
-    
+
     def __init__(self, directory_abspath, filter_list=[]):
         """
         Directory filtering utility.
-        
+
         :param filter_list: list of local files or subdirectories to be ignored
         """
         self.abspath = directory_abspath
@@ -51,7 +51,7 @@ class DirectoryFiltering(object):
                 f = os.path.join(self.abspath, f)
             self.abspaths_to_be_ignored.append(os.path.join(self.abspath, f))
         self._filter_function = self._generate_filter_function()
-    
+
     def _generate_filter_function(self):
         """
         Generate filter function for copytree **ignore** argument,
@@ -71,10 +71,8 @@ class DirectoryFiltering(object):
                         break
             return ignored_names
         return ignore
-    
+
     def copytree(self, dst, symlinks=False):
         shutil.copytree(self.abspath, dst,
                         symlinks=symlinks,
                         ignore=self._filter_function)
-        
-    

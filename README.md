@@ -1,3 +1,3 @@
-# IA4H-scm
+# IAL build
 
-Tools for Source Code Management (SCM) of IA4H code
+Tools for Source Code Management and build of IAL code

@@ -18,13 +18,13 @@ class GitError(Exception):
 
 
 class GitProxy(object):
-    
+
     def __init__(self, repository='.'):
         self.repository = os.path.abspath(repository)
         assert os.path.exists(os.path.join(self.repository, '.git')), \
             "This is not a Git **repository** : {}".format(self.repository)
         print('using ' + self._git_cmd(['git', 'version'])[0])
-    
+
     @contextmanager
     def cd_repo(self):
         """Context: in self.repository"""
@@ -34,15 +34,15 @@ class GitProxy(object):
             yield self.repository
         finally:
             os.chdir(owd)
-    
+
     def _git_cmd(self, cmd, stderr=None):
         """Wrapper to execute a git command."""
         return [line.strip() for line in
                 subprocess.check_output(cmd, cwd=self.repository, stderr=stderr).decode('utf-8').split('\n')
                 if line != '']
-    
+
     # Repository ---------------------------------------------------------------
-    
+
     def fetch(self, ref=None, remote=None):
         """Fetch distant **remote**."""
         print("Fetch...")
@@ -54,14 +54,14 @@ class GitProxy(object):
         for out in self._git_cmd(git_cmd):
             print(out)
         print("     ...ok")
-    
+
     def push(self, remote=None):
         """Push current branch to **remote**."""
         git_cmd = ['git', 'push', self.current_branch]
         if remote is not None:
             git_cmd.extend(['-u', remote])
         self._git_cmd(git_cmd)
-    
+
     @property
     def current_branch(self):
         """Currently checkedout branch."""
@@ -72,7 +72,7 @@ class GitProxy(object):
                 branch = branch.split()[1]
                 break
         return branch
-    
+
     # Branch(es) ---------------------------------------------------------------
 
     @property
@@ -80,7 +80,7 @@ class GitProxy(object):
         """List of local branches."""
         return sorted([r['ref'] for r in self._refs_get()
                        if r['rtype'] == 'branch' and r['remote'] is None])
-    
+
     def remote_branches(self, only_remote=None):
         """
         Dictionary of remote branches:
@@ -100,14 +100,14 @@ class GitProxy(object):
                 if k != only_remote:
                     remotes.pop(k)
         return remotes
-    
+
     def detached_branches(self, only_remote=None):
         """List remote branches as detached (remote/branch)."""
         detached = []
         for r, branches in self.remote_branches(only_remote).items():
             detached.extend([self.branch_as_detached(b, r) for b in branches])
         return detached
-    
+
     def branch_as_detached(self, branch, remote=None):
         """
         Get branch as detached syntax (remote/branch).
@@ -144,7 +144,7 @@ class GitProxy(object):
         else:
             remote_branch = None
         return remote_branch
-    
+
     def checkout_new_branch(self, branch, start_ref=None):
         """Create and checkout new branch, from current ref or **start_ref**."""
         print("Checkout new branch: '{}'".format(branch))
@@ -152,7 +152,7 @@ class GitProxy(object):
         if start_ref is not None:
             git_cmd.append(start_ref)
         self._git_cmd(git_cmd)
-    
+
     def pull(self, remote=None):
         """Update the local branch from remote's version."""
         print("Pull...")
@@ -162,9 +162,9 @@ class GitProxy(object):
         for out in self._git_cmd(git_cmd):
             print(out)
         print("    ...ok")
-    
+
     # Ref(s) -------------------------------------------------------------------
-    
+
     def _refs_get(self):
         git_cmd = ['git', 'show-ref']
         list_of_refs = [ref.split() for ref in self._git_cmd(git_cmd)]
@@ -193,44 +193,44 @@ class GitProxy(object):
                 self.ref_is_tag(ref) or
                 self.ref_is_branch(ref) or
                 self.commit_exists(ref))
-    
+
     def ref_is_tag(self, ref):
         """Check whether reference is tag."""
         return ref in self.tags
-    
+
     def ref_is_branch(self, ref):
         """Check whether reference is branch."""
         return (ref in self.local_branches or
                 any([ref in remote for remote in self.remote_branches().values()]) or
                 ref in self.detached_branches())
-    
+
     def refs_common_ancestor(self, ref1, ref2):
         """Common ancestor commit between 2 references (commits, branches, tags)."""
         git_cmd = ['git', 'merge-base', ref1, ref2]
         commit = self._git_cmd(git_cmd)[0]
         return commit
-    
+
     def ref_checkout(self, ref):
         """Checkout existing reference (commit, branch, tag)."""
         print("Checkout: " + ref)
         git_cmd = ['git', 'checkout', ref]
         self._git_cmd(git_cmd)
-    
+
     # Tag(s) -------------------------------------------------------------------
-    
+
     @property
     def tags(self):
-        """Return list of tags.""" 
+        """Return list of tags."""
         return sorted([r['ref'] for r in self._refs_get()
                        if r['rtype'] == 'tag'])
-    
+
     def tag_points_to(self, tag):
         """Return the associated commit to **tag**."""
         assert self.ref_exists(tag)
         git_cmd = ['git', 'rev-list', '-n', '1', tag]
         commit = self._git_cmd(git_cmd)[0]
         return commit
-    
+
     def tags_between(self, start_ref, end_ref):
         """Get the list of tags between 2 references (commits, branches, tags)."""
         git_cmd = ['git', 'log', '{}...{}'.format(start_ref, end_ref),
@@ -242,9 +242,9 @@ class GitProxy(object):
         list_of_tags = [[ref[4:].strip() for ref in line if ref.startswith('tag:')]
                         for line in list_of_tags]
         return list_of_tags[::-1]
-    
+
     # Commit(s) ----------------------------------------------------------------
-    
+
     def commit_exists(self, commit):
         """Check whether commit is existing."""
         git_cmd = ['git', 'rev-parse', '--verify', commit + '^{commit}']
@@ -253,11 +253,11 @@ class GitProxy(object):
             return True
         except subprocess.CalledProcessError:
             return False
-    
+
     def commit(self, message, add=False):
         """
         Commit the staged modifications.
-        
+
         :param message: commit message
         :param add: add locally modified files to stage before committing
         """
@@ -271,7 +271,7 @@ class GitProxy(object):
         """Latest commit in current history."""
         git_cmd = ['git', 'rev-parse', 'HEAD']
         return self._git_cmd(git_cmd)[0]
-    
+
     # Content ------------------------------------------------------------------
 
     def log(self, n=1, log_args=[]):
@@ -391,7 +391,7 @@ class GitProxy(object):
         """Delete a file from git."""
         git_cmd = ['git', 'rm', filename]
         self._git_cmd(git_cmd)
-    
+
     @property
     def is_clean(self):
         """
@@ -403,10 +403,10 @@ class GitProxy(object):
         return len(status) == 0
 
 
-class IA4Hview(object):
-    """Utilities around IA4H repository."""
+class IALview(object):
+    """Utilities around IAL repository."""
     _re_official_tags = re.compile('(?P<r>CY\d{2}((T|R)\d)?)(_(?P<b>.+)\.(?P<v>\d+))?$')
-    
+
     def __init__(self, repository, ref,
                  remote='origin',
                  new_branch=False,
@@ -480,7 +480,7 @@ class IA4Hview(object):
         # remote-tracking branch: update
         #if self.git_proxy.current_branch_is_tracking(only_remote=remote) is not None:
         #    self.git_proxy.pull(remote=remote)  # TODO: CLEANME: pull is dangerous
-    
+
     def __del__(self):
         try:
             if self.initial_checkedout not in (self.git_proxy.latest_commit, self.git_proxy.current_branch):
@@ -492,7 +492,7 @@ class IA4Hview(object):
                     print("(Unable to go back to previously checkedout state : {})".format(self.initial_checkedout))
         except Exception:
             pass
-    
+
     def info(self, out=sys.stdout):
         """Write info about the view."""
         info = ["-" * 50,
@@ -517,7 +517,7 @@ class IA4Hview(object):
     def split_ref(cls, git_ref):
         """
         Split the parts in the ref name, e.g.:
-        
+
         - for a branch named 'mary_CY47T1_dev', return {'user':'mary', 'release':'CY47T1', 'radical':'dev'}
         - for a branch named 'CY47_t1', return {'release':'CY47', 'radical':'t1'}
         - for a tag named 'CY47T1_r1.04', return {'release':'CY47T1', 'radical':'r1', 'version':'04'}
@@ -541,7 +541,7 @@ class IA4Hview(object):
             raise SyntaxError(" ".join(["Cannot recognize parts in git ref,",
                                         "which syntax must look like one of",
                                         "mary_CY47T1_dev, CY47_t1, CY47T1_r1.04, CY47T1"]))
-    
+
     def GCOdb_register(self, start_commit=None):
         """
         Register branch in GCO database (proxy to 'git_branch -q -a').
@@ -553,9 +553,9 @@ class IA4Hview(object):
             start_commit = '?'
         print("Register branch: '{}' in GCO database, with base commit: '{}'".format(self.git_proxy.current_branch, start_commit))
         subprocess.check_call(cmd, cwd=self.git_proxy.repository)
-    
+
     # History ------------------------------------------------------------------
-    
+
     @property
     def official_tagged_ancestors(self):
         """All official tagged ancestors."""
@@ -565,25 +565,25 @@ class IA4Hview(object):
                 if self._re_official_tags.match(tag):
                     official_tags.append(tag)
         return official_tags
-    
+
     @property
     def latest_tagged_ancestor(self):
         """Latest tagged ancestor."""
         tags = self.git_proxy.tags_between('CY38', 'HEAD')[-1]  # CY38 is the first one under Git
         return tags[0]
-    
+
     @property
     def latest_main_release_ancestor(self):
         """Latest main release which is ancestor to the branch."""
         for tag in self.official_tagged_ancestors[::-1]:  # start from latest one
             if self._re_official_tags.match(tag).group('b') is None:  # is it a main release
                 return tag
-    
+
     @property
     def latest_official_tagged_ancestor(self):
         """Latest official tagged ancestor."""
         return self.official_tagged_ancestors[-1]
-    
+
     @property
     def latest_official_branch_from_main_release(self):
         """
@@ -592,7 +592,7 @@ class IA4Hview(object):
         """
         latest_official_tagged_ancestor = self.official_tagged_ancestors[-1]
         return self._re_official_tags.match(latest_official_tagged_ancestor).groupdict()
-    
+
     # Content ------------------------------------------------------------------
     def touched_files_since(self, ref):
         """Lists touched files since **ref** (commit or tag)."""
@@ -604,12 +604,12 @@ class IA4Hview(object):
             else:
                 touched[k] = uncommitted[k]
         return touched
-    
+
     @property
     def touched_files_since_latest_tagged_ancestor(self):
         """Lists touched files since *self.latest_tagged_ancestor*."""
         return self.touched_files_since(self.latest_tagged_ancestors)
-    
+
     @property
     def touched_files_since_latest_official_tagged_ancestor(self):
         """Lists touched files since *self.latest_official_tagged_ancestor*."""

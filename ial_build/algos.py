@@ -10,7 +10,7 @@ import os
 import copy
 import shutil
 
-from .repositories import IA4Hview
+from .repositories import IALview
 from .pygmkpack import (Pack, PackError, GmkpackTool,
                         USUAL_BINARIES)
 
@@ -41,7 +41,7 @@ def guess_packname(git_ref,
     if homepack is None:
         homepack = GmkpackTool.get_homepack()
     if packtype == 'main':
-        ref_split = IA4Hview.split_ref(git_ref)
+        ref_split = IALview.split_ref(git_ref)
         args = GmkpackTool.args_for_main_commandline(ref_split['release'],
                                                      ref_split['radical'],
                                                      ref_split['version'],
@@ -87,7 +87,7 @@ def bundle_guess_packname(bundle,
                                           threads=bundle_download_threads,
                                           dryrun=True)
     if packtype == 'main':
-        ref_split = IA4Hview.split_ref(bundle_info['arpifs']['version'])
+        ref_split = IALview.split_ref(bundle_info['arpifs']['version'])
         args = GmkpackTool.args_for_main_commandline(ref_split['release'],
                                                      ref_split['radical'],
                                                      ref_split['version'],
@@ -107,7 +107,7 @@ def bundle_guess_packname(bundle,
     return os.path.join(*path_elements)
 
 
-def IA4H_gitref_to_incrpack(repository,
+def IAL_gitref_to_incrpack(repository,
                             git_ref,
                             compiler_label,
                             compiler_flag=None,
@@ -161,7 +161,7 @@ def IA4H_gitref_to_incrpack(repository,
             print("Please answer by 'y' or 'n'. Exit.")
             exit()
     os.environ['GMK_RELEASE_CASE_SENSITIVE'] = '1'
-    view = IA4Hview(repository, git_ref, fetch=fetch)
+    view = IALview(repository, git_ref, fetch=fetch)
     try:
         if preexisting_pack:
             pack = Pack(packname, preexisting=preexisting_pack, homepack=homepack)
@@ -185,7 +185,7 @@ def IA4H_gitref_to_incrpack(repository,
                                                     silent=silent)
             if remove_ics_:
                 pack.ics_remove('')  # for it to be re-generated at compile time, with proper options
-        pack.populate_from_IA4Hview_as_incremental(view, start_ref=start_ref)
+        pack.populate_from_IALview_as_incremental(view, start_ref=start_ref)
     except Exception:
         print("Failed export of git ref to pack !")
         del view  # to restore the repository state
@@ -197,7 +197,7 @@ def IA4H_gitref_to_incrpack(repository,
     return pack
 
 
-def IA4H_gitref_to_main_pack(repository,
+def IAL_gitref_to_main_pack(repository,
                              git_ref,
                              compiler_label,
                              compiler_flag=None,
@@ -218,9 +218,9 @@ def IA4H_gitref_to_main_pack(repository,
     :param compiler_flag: Gmkpack's compiler flag to be used
     :param homepack: directory in which to build pack
     :param populate_filter_file: filter file (list of files to be filtered)
-        for populate time (defaults from within ia4h_scm package)
+        for populate time (defaults from within ial_build package)
     :param link_filter_file: filter file (list of files to be filtered)
-        for link time (defaults from within ia4h_scm package)
+        for link time (defaults from within ial_build package)
     :param silent: to hide gmkpack's stdout
     :param ask_confirmation: ask for confirmation about the pack
         before actually creating pack and populating
@@ -239,7 +239,7 @@ def IA4H_gitref_to_main_pack(repository,
             print("Please answer by 'y' or 'n'. Exit.")
             exit()
     os.environ['GMK_RELEASE_CASE_SENSITIVE'] = '1'
-    view = IA4Hview(repository, git_ref, fetch=fetch)
+    view = IALview(repository, git_ref, fetch=fetch)
     # prepare arguments
     ref_split = view.split_ref(git_ref)
     if prefix == '__user__':
@@ -257,7 +257,7 @@ def IA4H_gitref_to_main_pack(repository,
         if remove_ics_:
             pack.ics_remove('')  # for it to be re-generated at compile time, with proper options
         pack.populate_hub(view.latest_main_release_ancestor)  # to build hub packages
-        pack.populate_from_IA4Hview_as_main(view,
+        pack.populate_from_IALview_as_main(view,
                                             populate_filter_file=populate_filter_file,
                                             link_filter_file=link_filter_file)
     except Exception:
@@ -283,16 +283,16 @@ def bundle_to_main_pack(bundle,
                         bundle_download_threads=0):
     """
     From bundle to main pack.
-    
+
     :param bundle: bundle file (yaml)
     :param compiler_label: Gmkpack's compiler label to be used
     :param compiler_flag: Gmkpack's compiler flag to be used
     :param bundle_cache_dir: cache directory in which to download/update repositories
     :param homepack: directory in which to build pack
     :param populate_filter_file: filter file (list of files to be filtered)
-        for populate time (defaults from within ia4h_scm package)
+        for populate time (defaults from within ial_build package)
     :param link_filter_file: filter file (list of files to be filtered)
-        for link time (defaults from within ia4h_scm package)
+        for link time (defaults from within ial_build package)
     :param silent: to hide gmkpack's stdout
     :param update_git_repositories: if False, take git repositories as they are,
         without trying to update (fetch/checkout/pull)
@@ -304,7 +304,7 @@ def bundle_to_main_pack(bundle,
                                           update=update_git_repositories,
                                           threads=bundle_download_threads)
     # prepare arguments
-    ref_split = IA4Hview.split_ref(bundle_info['arpifs']['version'])
+    ref_split = IALview.split_ref(bundle_info['arpifs']['version'])
     try:
         # make pack
         pack = GmkpackTool.new_main_pack(initial_release=ref_split['release'],
