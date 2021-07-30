@@ -9,8 +9,8 @@ import argparse
 import sys
 
 # Automatically set the python path
-package_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-sys.path.insert(0, package_path)
+repo_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+sys.path.insert(0, os.path.join(repo_path, 'src'))
 
 from ial_build.algos import IA4H_gitref_to_incrpack, IA4H_gitref_to_main_pack
 from ial_build.config import DEFAULT_IA4H_REPO

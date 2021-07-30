@@ -108,22 +108,22 @@ def bundle_guess_packname(bundle,
 
 
 def IAL_gitref_to_incrpack(repository,
-                            git_ref,
-                            compiler_label,
-                            compiler_flag=None,
-                            start_ref=None,
-                            packname='__guess__',
-                            preexisting_pack=False,
-                            clean_if_preexisting=True,
-                            homepack=None,
-                            rootpack=None,
-                            silent=False,
-                            ask_confirmation=False,
-                            remove_ics_=True,
-                            fetch=False):
+                           git_ref,
+                           compiler_label,
+                           compiler_flag=None,
+                           start_ref=None,
+                           packname='__guess__',
+                           preexisting_pack=False,
+                           clean_if_preexisting=True,
+                           homepack=None,
+                           rootpack=None,
+                           silent=False,
+                           ask_confirmation=False,
+                           remove_ics_=True,
+                           fetch=False):
     """
     From git ref to incremental pack.
-    
+
     :param repository: Git repository to be used
     :param git_ref: Git reference (branch, tag) to be exported
     :param compiler_label: Gmkpack's compiler label to be used
@@ -198,20 +198,20 @@ def IAL_gitref_to_incrpack(repository,
 
 
 def IAL_gitref_to_main_pack(repository,
-                             git_ref,
-                             compiler_label,
-                             compiler_flag=None,
-                             homepack=None,
-                             populate_filter_file='__inconfig__',
-                             link_filter_file='__inconfig__',
-                             silent=False,
-                             ask_confirmation=False,
-                             prefix='__user__',
-                             remove_ics_=True,
-                             fetch=False):
+                            git_ref,
+                            compiler_label,
+                            compiler_flag=None,
+                            homepack=None,
+                            populate_filter_file='__inconfig__',
+                            link_filter_file='__inconfig__',
+                            silent=False,
+                            ask_confirmation=False,
+                            prefix='__user__',
+                            remove_ics_=True,
+                            fetch=False):
     """
     From git ref to main pack.
-    
+
     :param repository: Git repository to be used
     :param git_ref: Git reference (branch, tag) to be exported
     :param compiler_label: Gmkpack's compiler label to be used
@@ -258,8 +258,8 @@ def IAL_gitref_to_main_pack(repository,
             pack.ics_remove('')  # for it to be re-generated at compile time, with proper options
         pack.populate_hub(view.latest_main_release_ancestor)  # to build hub packages
         pack.populate_from_IALview_as_main(view,
-                                            populate_filter_file=populate_filter_file,
-                                            link_filter_file=link_filter_file)
+                                           populate_filter_file=populate_filter_file,
+                                           link_filter_file=link_filter_file)
     except Exception:
         print("Failed export of git ref to pack !")
         del view  # to restore the repository state

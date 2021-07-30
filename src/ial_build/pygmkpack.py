@@ -711,7 +711,7 @@ class Pack(object):
                 if os.path.isdir(f_src):  # actual subproject
                     print(f)
                     subproject = DirectoryFiltering(f_src, pop_filter_list)
-                    subproject.copytree(f_dst, symlinks=True)
+                    subproject.copytree(f_dst, symlinks=True)  # TODO: rsync instead, to recompile only modified files
                 else:
                     shutil.copy(f_src, f_dst)  # single file
         # link filter
