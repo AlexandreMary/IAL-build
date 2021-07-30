@@ -10,4 +10,4 @@ from __future__ import print_function, absolute_import, unicode_literals, divisi
 IAL (IFS-ARPEGE & LAM:ALADIN-AROME-ALARO-HARMONIE) source code management.
 """
 
-__version__ = '1.0.7'
+__version__ = '1.0.8'
