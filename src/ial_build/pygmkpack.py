@@ -142,6 +142,8 @@ class GmkpackTool(object):
             args['-g'] = 'cy'
             args['-e'] = '.pack'
             args['-r'] = args['-r'].lower()
+        else:
+            args['-g'] = 'CY'
         if homepack in (None, ''):
             homepack = cls.get_homepack()
         args['-h'] = homepack
