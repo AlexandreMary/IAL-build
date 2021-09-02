@@ -477,9 +477,6 @@ class IALview(object):
                     self.git_proxy.ref_checkout(ref)
         # set branch name
         self.branch_name = self.git_proxy.current_branch
-        # remote-tracking branch: update
-        #if self.git_proxy.current_branch_is_tracking(only_remote=remote) is not None:
-        #    self.git_proxy.pull(remote=remote)  # TODO: CLEANME: pull is dangerous
 
     def __del__(self):
         try:
