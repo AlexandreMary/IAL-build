@@ -37,7 +37,7 @@ GMKPACK_HUB_PACKAGES = {'eckit':{'CY48':'1.4.4',
 for p in GMKPACK_HUB_PACKAGES.keys():
     GMKPACK_HUB_PACKAGES[p].update(**_ecSDK_dir)
 hosts_re = {
-    'belenos':re.compile('^belenoslogin\d\.belenoshpc\.meteo\.fr$'),
-    'taranis':re.compile('^taranislogin\d\.belenoshpc\.meteo\.fr$'),
+    'belenos':re.compile('^belenos(login)?\d+\.belenoshpc\.meteo\.fr$'),
+    'taranis':re.compile('^taranis(login)?\d+\.taranishpc\.meteo\.fr$'),
     'lxcnrm':re.compile('^[pls]x[a-z]+\d{1,2}$')
     }
