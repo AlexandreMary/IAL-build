@@ -12,8 +12,8 @@ import sys
 repo_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 sys.path.insert(0, os.path.join(repo_path, 'src'))
 
-from ial_build.algos import IA4H_gitref_to_incrpack, IA4H_gitref_to_main_pack
-from ial_build.config import DEFAULT_IA4H_REPO
+from ial_build.algos import IAL_gitref_to_incrpack, IAL_gitref_to_main_pack
+from ial_build.config import DEFAULT_IAL_REPO
 
 DEFAULT_COMPILER_FLAG = os.environ.get('GMK_OPT', '2y')
 
@@ -48,8 +48,8 @@ if __name__ == '__main__':
                         help='Call cleanpack.',
                         default=False)
     parser.add_argument('-r', '--repository',
-                        help='Location of the Git repository in which to populate branch (defaults to: {}).'.format(DEFAULT_IA4H_REPO),
-                        default=DEFAULT_IA4H_REPO)
+                        help='Location of the Git repository in which to populate branch (defaults to: {}).'.format(DEFAULT_IAL_REPO),
+                        default=DEFAULT_IAL_REPO)
     name = parser.add_mutually_exclusive_group()
     name.add_argument('--packname',
                       help='Force pack name (disadvised, and ignored for main packs).',
@@ -75,7 +75,7 @@ if __name__ == '__main__':
     if args.packtype == 'incr':
         if args.prefix != '__user__':
             print("Incr pack: argument --prefix ignored.")
-        IA4H_gitref_to_incrpack(args.repository,
+        IAL_gitref_to_incrpack(args.repository,
                                 args.git_ref,
                                 args.compiler_label,
                                 compiler_flag=args.compiler_flag,
@@ -92,7 +92,7 @@ if __name__ == '__main__':
     else:
         if args.packname != '__guess__':
             print("Main pack: argument --packname ignored.")
-        IA4H_gitref_to_main_pack(args.repository,
+        IAL_gitref_to_main_pack(args.repository,
                                  args.git_ref,
                                  args.compiler_label,
                                  compiler_flag=args.compiler_flag,
