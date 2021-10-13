@@ -365,6 +365,17 @@ def bundle2cache(bundle, src_dir=None, update=False, threads=1, no_colour=True,
     return src_dir, projects
 
 
+def parse_programs(programs):
+    if isinstance(programs, six.string_types):
+        if programs == '__usual__':
+            programs = USUAL_BINARIES
+        else:
+            programs = [p.strip() for p in programs.split(',')]
+    elif not isinstance(programs, list):
+        raise TypeError("**programs** must be a string (e.g. 'MASTERODB,BATOR') or a list")
+    return programs
+
+
 def pack_build_executables(pack,
                            programs=USUAL_BINARIES,
                            silent=False,
@@ -381,13 +392,7 @@ def pack_build_executables(pack,
         pack = Pack(pack, preexisting=True, homepack=homepack)
     elif not isinstance(pack, Pack):
         raise PackError("**pack** argument must be a pack name or a Pack instance")
-    if isinstance(programs, six.string_types):
-        if programs == '__usual__':
-            programs = USUAL_BINARIES
-        else:
-            programs = [p.strip() for p in programs.split(',')]
-    elif not isinstance(programs, list):
-        raise TypeError("**programs** must be a string (e.g. 'MASTERODB,BATOR') or a list")
+    programs = parse_programs(programs)
     build_report = {}
     # start by compiling sources without any executable
     print("-" * 50)

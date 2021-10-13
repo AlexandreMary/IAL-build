@@ -12,7 +12,7 @@ import sys
 repo_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 sys.path.insert(0, os.path.join(repo_path, 'src'))
 
-from ial_build.algos import IAL_gitref_to_incrpack, IAL_gitref_to_main_pack
+from ial_build.algos import IAL_gitref_to_incrpack, IAL_gitref_to_main_pack, parse_programs
 from ial_build.config import DEFAULT_IAL_REPO
 
 DEFAULT_COMPILER_FLAG = os.environ.get('GMK_OPT', '2y')
@@ -50,6 +50,9 @@ if __name__ == '__main__':
     parser.add_argument('-r', '--repository',
                         help='Location of the Git repository in which to populate branch (defaults to: {}).'.format(DEFAULT_IAL_REPO),
                         default=DEFAULT_IAL_REPO)
+    parser.add_argument('-p', '--programs',
+                        help="Programs which ics_{p} script to be generated, e.g. 'masterodb' or 'masterodb,bator'",
+                        default='')
     name = parser.add_mutually_exclusive_group()
     name.add_argument('--packname',
                       help='Force pack name (disadvised, and ignored for main packs).',
@@ -75,32 +78,35 @@ if __name__ == '__main__':
     if args.packtype == 'incr':
         if args.prefix != '__user__':
             print("Incr pack: argument --prefix ignored.")
-        IAL_gitref_to_incrpack(args.repository,
-                                args.git_ref,
-                                args.compiler_label,
-                                compiler_flag=args.compiler_flag,
-                                packname=args.packname,
-                                preexisting_pack=args.preexisting_pack,
-                                clean_if_preexisting=args.clean_if_preexisting,
-                                homepack=args.homepack,
-                                rootpack=args.rootpack,
-                                silent=False,
-                                ask_confirmation=True,
-                                remove_ics_=False,
-                                fetch=args.fetch,
-                                start_ref=args.start_ref)
+        pack = IAL_gitref_to_incrpack(args.repository,
+                                      args.git_ref,
+                                      args.compiler_label,
+                                      compiler_flag=args.compiler_flag,
+                                      packname=args.packname,
+                                      preexisting_pack=args.preexisting_pack,
+                                      clean_if_preexisting=args.clean_if_preexisting,
+                                      homepack=args.homepack,
+                                      rootpack=args.rootpack,
+                                      silent=False,
+                                      ask_confirmation=True,
+                                      remove_ics_=False,
+                                      fetch=args.fetch,
+                                      start_ref=args.start_ref)
     else:
         if args.packname != '__guess__':
             print("Main pack: argument --packname ignored.")
-        IAL_gitref_to_main_pack(args.repository,
-                                 args.git_ref,
-                                 args.compiler_label,
-                                 compiler_flag=args.compiler_flag,
-                                 homepack=args.homepack,
-                                 populate_filter_file=args.populate_filter_file,
-                                 link_filter_file=args.link_filter_file,
-                                 silent=False,
-                                 ask_confirmation=True,
-                                 prefix=args.prefix,
-                                 remove_ics_=False,
-                                 fetch=args.fetch)
+        pack = IAL_gitref_to_main_pack(args.repository,
+                                       args.git_ref,
+                                       args.compiler_label,
+                                       compiler_flag=args.compiler_flag,
+                                       homepack=args.homepack,
+                                       populate_filter_file=args.populate_filter_file,
+                                       link_filter_file=args.link_filter_file,
+                                       silent=False,
+                                       ask_confirmation=True,
+                                       prefix=args.prefix,
+                                       remove_ics_=False,
+                                       fetch=args.fetch)
+    if args.programs != '':
+        for p in parse_programs(args.programs):
+            pack.ics_build_for(p, GMK_THREADS=4)
