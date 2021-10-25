@@ -22,7 +22,7 @@ _ecSDK_dir = {'belenos':'/home/gmap/mrpe/mary/public/ecSDK',
               'lxcnrm':'/home/common/epygram/public/ecSDK',
               }
 GMKPACK_HUB_PACKAGES = {'eckit':{'CY48':'1.4.4',
-                                 'CY48T1':'1.4.4',
+                                 'CY48T1':'mf_1.4.4_for48T2',
                                  'CY46T1':'1.4.4',
                                  'project':'ecSDK'},
                         'fckit':{'CY48':'0.6.4',
