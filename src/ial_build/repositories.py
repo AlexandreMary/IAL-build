@@ -12,6 +12,8 @@ import sys
 import io
 from contextlib import contextmanager
 
+from .config import IAL_OFFICIAL_TAGS_re, IAL_BRANCHES_re
+
 
 class GitError(Exception):
     pass
@@ -405,7 +407,9 @@ class GitProxy(object):
 
 class IALview(object):
     """Utilities around IAL repository."""
-    _re_official_tags = re.compile('(?P<r>CY\d{2}((T|R)\d)?)(_(?P<b>.+)\.(?P<v>\d+))?$')
+    #_re_official_tags = re.compile('(?P<r>CY\d{2}((T|R)\d)?)(_(?P<b>.+)\.(?P<v>\d+))?$')
+    _re_official_tags = IAL_OFFICIAL_TAGS_re
+    _re_branches = IAL_BRANCHES_re
 
     def __init__(self, repository, ref,
                  remote='origin',
@@ -510,34 +514,43 @@ class IALview(object):
         for line in info:
             out.write(line + '\n')
 
+    @property
+    def is_current_ref_IAL_conventional(self):
+        return self.is_ref_IAL_conventional(self_ref)
+
+    @classmethod
+    def is_ref_IAL_conventional(self, git_ref):
+        tag = cls._re_official_tags.match(git_ref)
+        branch = cls._re_branches.match(git_ref)
+        match = tag if tag else branch
+        return match is not None
+
+    @property
+    def self_ref_split(self):
+        return self.split_ref(self.ref)
+
     @classmethod
     def split_ref(cls, git_ref):
         """
         Split the parts in the ref name, e.g.:
 
-        - for a branch named 'mary_CY47T1_dev', return {'user':'mary', 'release':'CY47T1', 'radical':'dev'}
-        - for a branch named 'CY47_t1', return {'release':'CY47', 'radical':'t1'}
-        - for a tag named 'CY47T1_r1.04', return {'release':'CY47T1', 'radical':'r1', 'version':'04'}
-        - for a tag named 'CY47T1', return {'release':'CY47T1'}
+        - for a branch named 'mary_CY47T1_dev', return {'user':'mary', 'release':'47T1', 'radical':'dev'}
+        - for a tag named 'CY47_t1.04', return {'release':'47', 'radical':'t1', 'version':'04'}
+        - for a tag named 'CY47T1', return {'release':'47T1'}
 
         (the returned dict is always complete, with None for non-relevant parts)
         """
-        _re = re.compile('((?P<user>.+)_)?' +
-                         '(?P<release>CY\d{2}((T|R)\d)?)' +
-                         '(_(?P<radical>.+))?$')
-        match = _re.match(git_ref)
+        split = {'user':None, 'radical':None, 'version':None}
+        tag = cls._re_official_tags.match(git_ref)
+        branch = cls._re_branches.match(git_ref)
+        match = tag if tag else branch
         if match:
-            split = match.groupdict()
-            split['version'] = None
-            if split['radical'] is not None:
-                version = re.match('(?P<radical>.+)\.(?P<version>\d{2})$', split['radical'])
-                if version:
-                    split.update(version.groupdict())
+            split.update(match.groupdict())
             return split
         else:
             raise SyntaxError(" ".join(["Cannot recognize parts in git ref,",
                                         "which syntax must look like one of",
-                                        "mary_CY47T1_dev, CY47_t1, CY47T1_r1.04, CY47T1"]))
+                                        "mary_CY47T1_dev (branch), CY47T1_r1.04 (tag), CY47T1 (tag)"]))
 
     def GCOdb_register(self, start_commit=None):
         """
@@ -573,7 +586,7 @@ class IALview(object):
     def latest_main_release_ancestor(self):
         """Latest main release which is ancestor to the branch."""
         for tag in self.official_tagged_ancestors[::-1]:  # start from latest one
-            if self._re_official_tags.match(tag).group('b') is None:  # is it a main release
+            if self._re_official_tags.match(tag).group('radical') is None:  # is it a main release
                 return tag
 
     @property

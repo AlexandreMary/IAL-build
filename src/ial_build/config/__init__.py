@@ -11,10 +11,21 @@ Configuration parameters.
 import os
 import re
 
+IAL_OFFICIAL_TAGS_re = re.compile('CY(?P<release>\d{2}([TRH]\d)?)' +
+                                  '(_(?P<radical>.+)\.(?P<version>\d{2}))?$')
+IAL_OFFICIAL_PACKS_re = re.compile('(?P<prefix>((cy)|(CY))?)(?P<release>\d{2}([TRHtrh]\d)?)' + '_' +
+                                   '(?P<radical>.+)\.(?P<version>\d{2})' + '\.' + 
+                                   '(?P<compiler_label>\w+)\.(?P<compiler_flag>\w+)' +
+                                   '(?P<suffix>(\.pack)?)$')
+IAL_BRANCHES_re = re.compile('_'.join(['(?P<user>\w+)',
+                                       'CY(?P<release>\d{2}([TRH]\d)?)',
+                                       '(?P<radical>.+)$']))
+
 DEFAULT_IAL_REPO = os.environ.get('DEFAULT_IAL_REPO')
 if DEFAULT_IAL_REPO in ('', None):
     GIT_HOMEPACK = os.environ.get('GIT_HOMEPACK', os.path.join(os.environ['HOME'], 'repositories'))
     DEFAULT_IAL_REPO = os.path.join(GIT_HOMEPACK, 'IAL')
+DEFAULT_PACK_COMPILER_FLAG = '2y'
 
 # temporary => UNTIL USE OF BUNDLE
 _ecSDK_dir = {'belenos':'/home/gmap/mrpe/mary/public/ecSDK',
@@ -36,6 +47,7 @@ GMKPACK_HUB_PACKAGES = {'eckit':{'CY48':'1.4.4',
                         }
 for p in GMKPACK_HUB_PACKAGES.keys():
     GMKPACK_HUB_PACKAGES[p].update(**_ecSDK_dir)
+# hosts recognition
 hosts_re = {
     'belenos':re.compile('^belenos(login)?\d+\.belenoshpc\.meteo\.fr$'),
     'taranis':re.compile('^taranis(login)?\d+\.taranishpc\.meteo\.fr$'),

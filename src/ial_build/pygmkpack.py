@@ -17,6 +17,8 @@ from contextlib import contextmanager
 from bronx.stdtypes.date import now
 
 from .util import DirectoryFiltering, copy_files_in_cwd
+from .config import (IAL_OFFICIAL_PACKS_re, IAL_OFFICIAL_TAGS_re, IAL_BRANCHES_re,
+                     DEFAULT_PACK_COMPILER_FLAG)
 
 #: No automatic export
 __all__ = []
@@ -45,6 +47,7 @@ COMPONENTS_MAP = {'eckit':'hub/local/src/ecSDK',
                   }
 
 
+
 class PackError(Exception):
     pass
 
@@ -53,13 +56,19 @@ class GmkpackTool(object):
 
     _default_branch_radical = 'main'
     _default_version_number = '00'
-    _default_compiler_flag = '2y'
+    _default_compiler_flag = DEFAULT_PACK_COMPILER_FLAG
+    _OPTIONSPACK_re = re.compile('GMKFILE=(?P<gmkfile>\.+)\s+<= -l (?P<label>\w+)\s+ -o (?P<flag>\w+)$')
+    OFFICIAL_PACKS_re = IAL_OFFICIAL_PACKS_re
 
     @staticmethod
     def clean_env():
-        k = 'GMK_USER_PACKNAME_STYLE'
-        if k in os.environ:
-            del os.environ[k]
+        vars_to_unset = ('GMK_USER_PACKNAME_STYLE', 'PACK_EXT', 'PACK_PREFIX')
+        for k in vars_to_unset:
+            if k in os.environ:
+                del os.environ[k]
+        vars_to_set = {'GMK_RELEASE_CASE_SENSITIVE':'1', }
+        for k, v in vars_to_set.items():
+            os.environ[k] = v
 
     @classmethod
     def commandline(cls,
@@ -88,54 +97,244 @@ class GmkpackTool(object):
             r = subprocess.check_call(command)
         return r
 
+    @classmethod
+    def scan_rootpacks(cls, directory):
+        """Scan a 'rootpacks' directory, looking for official releases packs."""
+        rootpacks = {}
+        for p in os.listdir(directory):
+            m = cls.OFFICIAL_PACKS_re.match(p)
+            if m:
+                rootpacks[p] = m.groupdict()
+        return rootpacks
+
+    @classmethod
+    def find_matching_rootpacks(cls,
+                                rootpacks_directory,
+                                official_tag,
+                                compiler_label=None,
+                                compiler_flag=None):
+        """Find rootpacks matching **official_tag**, with according label/flag if requested."""
+        rootpacks = cls.scan_rootpacks(rootpacks_directory)
+        matching = {}
+        for p in rootpacks.keys():
+            if rootpacks[p]['radical'] == 'main':
+                tag = 'CY{}'.format(rootpacks[p]['release'].upper())
+            else:
+                tag = 'CY{}_{}.{}'.format(rootpacks[p]['release'].upper(),
+                                          rootpacks[p]['radical'],
+                                          rootpacks[p]['version'])
+            if tag == official_tag:
+                if all(compiler_label in (None, rootpacks[p]['compiler_label']),
+                       compiler_flag in (None, rootpacks[p]['compiler_flag'])):
+                    matching[p] = rootpacks[p]
+        return matching
+
+# ACCESSORS -------------------------------------------------------------------
+
     @staticmethod
-    def get_homepack():
-        """Get a HOMEPACK directory, $HOMEPACK, or $HOME/pack."""
-        homepack = os.environ.get('HOMEPACK')
+    def get_homepack(homepack=None):
+        """Get a HOMEPACK directory, from argument, $HOMEPACK, or $HOME/pack."""
         if homepack in (None, ''):
-            homepack = os.path.join(os.environ.get('HOME'), 'pack')
+            homepack = os.environ.get('HOMEPACK')
+            if homepack in (None, ''):
+                homepack = os.path.join(os.environ.get('HOME'), 'pack')
         return homepack
 
     @staticmethod
-    def get_rootpack():
-        """Get a ROOTPACK directory from $ROOTPACK if defined, or None."""
-        rootpack = os.environ.get('ROOTPACK')
+    def get_rootpack(rootpack=None):
+        """Get a ROOTPACK directory from argument, $ROOTPACK if defined, or None."""
+        if rootpack in (None, ''):
+            rootpack = os.environ.get('ROOTPACK')
         return rootpack if rootpack != '' else None
 
+    @classmethod
+    def get_compiler_label(cls, compiler_label=None):
+        """Get compiler label, either from argument (if not None) or from env var $GMKFILE."""
+        if compiler_label in (None, ''):
+            # get GMKFILE
+            gmkfile = os.environ.get('GMKFILE')
+            assert gmkfile not in (None, ''), "Cannot guess compiler label (-l): $GMKFILE is not set."
+            # parse optionspack
+            options = [f.strip()
+                       for f in subprocess.check_output(['optionspack']).decode('utf-8').split('\n')
+                       if f != '']
+            for o in options:
+                m = cls._OPTIONSPACK_re.match(o)
+                if m and m.group('gmkfile') == gmkfile:
+                    compiler_label = m.group('label')
+        return compiler_label
+
+    @classmethod
+    def get_compiler_flag(cls, compiler_flag=None):
+        """Get compiler flage, either from argument, $GMK_OPT or default value."""
+        if compiler_flag in (None, ''):
+            compiler_flag = os.environ.get('GMK_OPT')
+            if compiler_flag in (None, ''):
+                compiler_flag = cls._default_compiler_flag
+        return compiler_flag
+
+# getargs newway methods  -----------------------------------------------------
+
     @staticmethod
-    def build_packname(args, mainpack):
-        """Emulates gmkpack generation of pack name."""
-        if mainpack:
-            packname = '{}{}_{}.{}.{}.{}'.format(args.get('-g', ''), args['-r'], args['-b'],
-                                                 args['-n'], args['-l'], args['-o'])
+    def mainpack_getargs_from_IAL_git_ref(IAL_git_ref,
+                                          IAL_repo_path=None):
+        """
+        Get necessary arguments for main pack from IAL_git_ref.
+
+        :IAL_repo_path: required only if IAL_git_ref is not conventional
+        """
+        from .repositories import IALview
+        is_a_tag = IAL_OFFICIAL_TAGS_re.match(IAL_git_ref)
+        is_a_conventional_branch = IAL_BRANCHES_re.match(IAL_git_ref)
+        if is_a_tag:
+            gmk_release = is_a_tag.group('release')
+            gmk_branch = is_a_tag.group('radical')
+            gmk_version = is_a_tag.group('version')
+            gmk_prefix = 'CY'
+        elif is_a_conventional_branch:
+            gmk_release = is_a_conventional_branch.group('release')
+            gmk_branch = is_a_conventional_branch.group('radical')
+            gmk_version = '00'
+            gmk_prefix = is_a_conventional_branch.group('user') + '_CY'
         else:
-            packname = args[-u]
+            print("Warning: pack nomenclature will not be perfectly mapping git reference.")
+            assert IAL_repo_path is not None, "IAL repository path is required because git ref is not conventional."
+            ial = IALview(IAL_repo_path, IAL_git_ref)
+            ancestor = IAL_OFFICIAL_TAGS_re.match(ial.latest_official_tagged_ancestor).groupdict()
+            gmk_release = ancestor['release']
+            gmk_branch = IAL_git_ref
+            gmk_version = '00'
+            gmk_prefix = '_upon'
+        args = {'-r':gmk_release,
+                '-b':gmk_branch,
+                '-n':gmk_version,
+                '-g':gmk_prefix}
+        return args
+
+    @classmethod
+    def pack_getargs_others(cls,
+                            compiler_label=None,
+                            compiler_flag=None,
+                            homepack=None):
+        """Get necessary arguments for pack from argument or env variables."""
+        return {'-o':cls.get_compiler_flag(compiler_flag),
+                '-l':cls.get_compiler_label(compiler_label),
+                '-h':cls.get_homepack(homepack)}
+ 
+    @staticmethod
+    def incrpack_getargs_from_IAL_git_ref(IAL_git_ref,
+                                          IAL_repo_path):
+        """Get necessary arguments for incr pack from IAL_git_ref."""
+        from .repositories import IALview
+        ial = IALview(IAL_repo_path, IAL_git_ref)
+        # ancestor, for root pack
+        ancestor = IAL_OFFICIAL_TAGS_re.match(ial.latest_official_tagged_ancestor).groupdict()
+        return {'-r':ancestor.group('release'),
+                '-b':ancestor.group('radical'),
+                '-v':ancestor.group('version')}
+
+    @classmethod
+    def incrpack_getargs_packname(cls, IAL_git_ref, compiler_label=None, compiler_flag=None):
+        """Get incr pack name (-u), built from ref and compiler."""
+        return {'-u':'.'.join([IAL_git_ref,
+                               cls.get_compiler_label(compiler_label),
+                               cls.get_compiler_flag(compiler_flag)])}
+
+    @classmethod
+    def incrpack_getargs_from_root_pack(cls,
+                                        args,
+                                        IAL_git_ref,
+                                        IAL_repo_path,
+                                        rootpack=None,
+                                        compiler_label=None,
+                                        compiler_flag=None):
+        """Get arguments linked to syntax of root pack."""
+        from .repositories import IALview
+        rootpack = cls.get_rootpack(rootpack)
+        # ancestor, for root pack
+        ial = IALview(IAL_repo_path, IAL_git_ref)
+        ancestor = ial.latest_official_tagged_ancestor
+        matching = cls.find_matching_rootpacks(rootpack, ancestor, compiler_label, compiler_flag)
+        if len(matching) == 1:
+            actual_rootpack = matching[list(matching.keys())[0]]
+            args['-g'] = actual_rootpack.get('prefix')
+            args['-e'] = actual_rootpack.get('suffix')
+            lower_case = actual_rootpack.get('radical', '').islower()
+            if lower_case:
+                args['-r'] = args['-r'].lower()
+            return args
+        else:
+            if len(matching) == 0:
+                radic = "Could not find a pack in ROOTPACK={}"
+            else:
+                radic = "Too many packs in ROOTPACK={}"
+            raise ValueError(" ".join([radic,
+                                       "matching latest tagged ancestor ({}) of IAL_git_ref={}",
+                                       "and compiler specifs label={}, flag={}."]).format(rootpack,
+                                           ancestor, IAL_git_ref, compiler_label, compiler_flag))
+
+    @classmethod
+    def getargs(cls,
+                pack_type,
+                IAL_git_ref,
+                IAL_repo_path=None,
+                compiler_label=None,
+                compiler_flag=None,
+                homepack=None,
+                rootpack=None):
+        """
+        Build args for incremental pack.
+        
+        :param pack_type: type of pack, among ('incr', 'main')
+        :param IAL_git_ref: IAL git reference
+        :param IAL_repo_path: IAL repository path
+        :param compiler_label: Gmkpack's compiler label to be used
+        :param compiler_flag: Gmkpack's compiler flag to be used
+        :param homepack: directory in which to build pack
+        :param rootpack: diretory in which to look for root pack
+        """
+        if pack_type == 'main':
+            args = cls.mainpack_getargs_from_IAL_git_ref(IAL_git_ref, IAL_repo_path)
+        elif pack_type == 'incr':
+            args = cls.incrpack_getargs_from_IAL_git_ref(IAL_git_ref, IAL_repo_path)
+            args.update(cls.incrpack_getargs_packname(IAL_git_ref,
+                                                      compiler_label=compiler_label,
+                                                      compiler_flag=compiler_flag))
+            args.update(cls.incrpack_getargs_from_root_pack(args,
+                                                            IAL_git_ref,
+                                                            IAL_repo_path,
+                                                            rootpack=rootpack,
+                                                            compiler_label=compiler_label,
+                                                            compiler_flag=compiler_flag))
+        args.update(cls.pack_getargs_others(compiler_label=compiler_label,
+                                            compiler_flag=compiler_flag,
+                                            homepack=homepack))
+        return args
+
+# args oldway methods  --------------------------------------------------------
 
     @classmethod
     def args_for_incremental_commandline(cls,
                                          packname,
-                                         compiler_label,
                                          initial_release,
                                          initial_branch=None,
                                          initial_branch_version=None,
+                                         compiler_label=None,
                                          compiler_flag=None,
                                          rootpack=None,
                                          homepack=None):
         """Build the dict associating arguments to commandline."""
         args = {'-r':initial_release.replace('cy', '').replace('CY', ''),
-                '-l':compiler_label,
+                '-l':cls.get_compiler_label(compiler_label),
+                '-o':cls.get_compiler_flag(compiler_flag),
+                '-h':cls.get_homepack(homepack),
                 '-u':packname}
         if initial_branch is not None:
             args['-b'] = initial_branch
             if initial_branch_version is not None:
                 args['-v'] = initial_branch_version
-        if compiler_flag in (None, ''):
-            compiler_flag = os.environ.get('GMK_OPT')
-            if compiler_flag in (None, ''):
-                compiler_flag = cls._default_compiler_flag
-        args['-o'] = compiler_flag
-        if rootpack in (None, ''):
-            rootpack = cls.get_rootpack()
+        rootpack = cls.get_rootpack(rootpack)
+        # rootpack and implications
         if rootpack is not None:
             args['-f'] = rootpack
         if rootpack == GCO_ROOTPACK:
@@ -144,9 +343,6 @@ class GmkpackTool(object):
             args['-r'] = args['-r'].lower()
         else:
             args['-g'] = 'CY'
-        if homepack in (None, ''):
-            homepack = cls.get_homepack()
-        args['-h'] = homepack
         return args
 
     @classmethod
@@ -154,42 +350,59 @@ class GmkpackTool(object):
                                   initial_release,
                                   branch_radical,
                                   version_number,
-                                  compiler_label,
+                                  compiler_label=None,
                                   compiler_flag=None,
                                   prefix=None,
                                   homepack=None):
         """Build the dict associating arguments to commandline."""
-        if compiler_flag in (None, ''):
-            compiler_flag = os.environ.get('GMK_OPT')
-            if compiler_flag in (None, ''):
-                compiler_flag = cls._default_compiler_flag
         if branch_radical is None:
             branch_radical = cls._default_branch_radical
         if version_number is None:
             version_number = cls._default_version_number
         args = {'-r':initial_release.replace('cy', '').replace('CY', ''),
                 '-b':branch_radical,
-                '-o':compiler_flag,
-                '-l':compiler_label,
+                '-o':cls.get_compiler_flag(compiler_flag),
+                '-l':cls.get_compiler_label(compiler_label),
+                '-h':cls.get_homepack(homepack),
                 '-n':version_number}
         if prefix is not None:
             args['-g'] = prefix
-        if homepack in (None, ''):
-            homepack = cls.get_homepack()
-        args['-h'] = homepack
         return args
 
-    @staticmethod
-    def args2packname(args, mainpack):
+# other methods ---------------------------------------------------------------
+
+    @classmethod
+    def args2packname(cls, args, pack_type):
         """Emulates gmkpack generation of pack name."""
-        if mainpack:
-            packname = '{}{}_{}.{}.{}.{}'.format(args.get('-g', ''), args['-r'], args['-b'],
-                                                 args['-n'], args['-l'], args['-o'])
-            if '-e' in args:
-                packname += args['-e']
-        else:
-            packname = args['-u']
-        return packname
+        if pack_type == 'main':
+            return '{}{}_{}.{}.{}.{}{}'.format(args.get('-g', ''), args['-r'], args['-b'],
+                                               args['-n'], args['-l'], args['-o'],
+                                               args.get('-e', ''))
+        elif pack_type == 'incr':
+            return args[-u]
+
+    @classmethod
+    def guess_pack_name(cls, IAL_git_ref, compiler_label, compiler_flag, pack_type,
+                        IAL_repo_path=None):
+        """
+        Guess pack name given IAL git ref and compiler options.
+
+       :param IAL_repo_path: is only necessary for main packs only if
+            the **IAL_git_ref** happens not to be a conventional IAL name.
+        """
+        if pack_type == 'main':
+            args = cls.getargs(pack_type,
+                               IAL_git_ref,
+                               IAL_repo_path=IAL_repo_path,
+                               compiler_label=compiler_label,
+                               compiler_flag=compiler_flag)
+        elif pack_type == 'incr':
+            args = cls.incrpack_getargs_packname(IAL_git_ref,
+                                                 compiler_label,
+                                                 compiler_flag)
+        return cls.args2packname(args, pack_type)
+
+# Pack Building methods -------------------------------------------------------
 
     @classmethod
     def new_incremental_pack(cls,
@@ -215,27 +428,22 @@ class GmkpackTool(object):
         :param homepack: home directory for packs
         :param silent: to mute gmkpack
         """
-        pack = Pack(packname, preexisting=False, homepack=homepack)
-        if os.path.exists(pack.abspath):
-            raise PackError('Pack already exists, cannot create: {}'.format(pack.abspath))
         args = cls.args_for_incremental_commandline(packname,
-                                                    compiler_label,
                                                     initial_release=initial_release,
                                                     initial_branch=initial_branch,
                                                     initial_branch_version=initial_branch_version,
+                                                    compiler_label=compiler_label,
                                                     compiler_flag=compiler_flag,
                                                     rootpack=rootpack,
                                                     homepack=homepack)
-        print(args)
-        cls.commandline(args, silent=silent)
-        return pack
+        return cls.create_pack_from_args(args, 'main', silent=silent)
 
     @classmethod
     def new_main_pack(cls,
                       initial_release,
                       branch_radical,
                       version_number,
-                      compiler_label,
+                      compiler_label=None,
                       compiler_flag=None,
                       prefix=None,
                       homepack=None,
@@ -255,15 +463,21 @@ class GmkpackTool(object):
         args = cls.args_for_main_commandline(initial_release,
                                              branch_radical,
                                              version_number,
-                                             compiler_label,
+                                             compiler_label=compiler_label,
                                              compiler_flag=compiler_flag,
                                              prefix=prefix,
                                              homepack=homepack)
-        packname = cls.args2packname(args, mainpack=True)
-        pack = Pack(packname, preexisting=False, homepack=homepack)
+        return cls.create_pack_from_args(args, 'main', silent=silent)
+
+    @classmethod
+    def create_pack_from_args(cls, args, pack_type,
+                              silent=False):
+        packname = cls.args2packname(args, pack_type)
+        pack = Pack(packname, preexisting=False, homepack=args.get('-h'))
         if os.path.exists(pack.abspath):
             raise PackError('Pack already exists, cannot create: {}'.format(pack.abspath))
-        cls.commandline(args, ['-a', '-K'], silent=silent)
+        options = ['-a', '-K'] if pack_type == 'main' else []
+        cls.commandline(args, options, silent=silent)
         return pack
 
 
@@ -595,15 +809,15 @@ class Pack(object):
         branch_ancestor_info = view.latest_official_branch_from_main_release
         args = self.genesis_arguments
         pack_release = self.release
-        assert branch_ancestor_info['r'] == pack_release, \
-            "release: (view)={} vs. (pack)={}".format(branch_ancestor_info['r'],
+        assert branch_ancestor_info['release'] == pack_release, \
+            "release: (view)={} vs. (pack)={}".format(branch_ancestor_info['release'],
                                                       pack_release)
-        if branch_ancestor_info['b'] is not None:
-            assert branch_ancestor_info['b'] == args['-b'], \
-                "official view: (view)={} vs. (pack)={}".format(branch_ancestor_info['b'],
+        if branch_ancestor_info['radical'] is not None:
+            assert branch_ancestor_info['radical'] == args['-b'], \
+                "official view: (view)={} vs. (pack)={}".format(branch_ancestor_info['radical'],
                                                                     args['-b'])
-            assert branch_ancestor_info['v'] == args['-v'], \
-                "official view version: (view)={} vs. (pack)={}".format(branch_ancestor_info['v'],
+            assert branch_ancestor_info['version'] == args['-v'], \
+                "official view version: (view)={} vs. (pack)={}".format(branch_ancestor_info['version'],
                                                                             args['-v'])
         else:
             assert args['-b'] == 'main'
@@ -611,17 +825,13 @@ class Pack(object):
     # Populate from bundle -----------------------------------------------------
 
     def bundle_populate_mainpack(self,
-                                 cache_dir,
-                                 bundle_info,
+                                 bundle,
                                  populate_filter_file=None,
                                  link_filter_file=None):
         """
         Populate src/local in main pack from bundle.
 
-        :param cache_dir: directory in which to find the cached bundled repositories.
-        :param bundle_info: a dict(project:{info}}, where {info} is the dict of
-            properties concerning the repository of each component,
-            as read in the bundle file.
+        :param bundle: the ial_build.bundle.IALBundle object.
         :param populate_filter_file: file in which to read the files to be
             filtered at populate time.
             Special values:
@@ -634,14 +844,14 @@ class Pack(object):
             '__inrepo__' will read according file in Git repo
         """
         # hub packages
-        self._bundle_populate_hub(cache_dir, bundle_info)
+        self._bundle_populate_hub(bundle)
         # src/local
         msg = "Populating components in pack's src/local:"
         print("\n" + msg + "\n" + "-" * len(msg))
-        for component, properties in bundle_info.items():
+        for component, properties in bundle.projects.items():
             pkg_dst = self._bundle_component_destination(component, properties)
             if pkg_dst.startswith('src/local'):
-                repository = os.path.join(cache_dir, component)
+                repository = os.path.join(bundle.downloaded_to, component)
                 subdir = properties.get('copy_to_subdirectory', None)
                 version = properties['version']
                 remote = properties['git']
@@ -651,23 +861,45 @@ class Pack(object):
                                               populate_filter_file=populate_filter_file,
                                               link_filter_file=link_filter_file)
         # log in pack
-        self._bundle_write_properties(bundle_info)
+        self._bundle_write_properties(projects)
 
-    def _bundle_populate_hub(self, cache_dir, bundle_info):
+    def bundle_populate_incrpack(self, bundle):
+        """
+        Populate src/local in incr pack from bundle.
+
+        :param bundle: the ial_build.bundle.IALBundle object.
+        """
+        # hub packages: TODO: should we ? or check that it corresponds to root pack
+        self._bundle_populate_hub(bundle)
+        # src/local
+        msg = "Populating components in pack's src/local:"
+        print("\n" + msg + "\n" + "-" * len(msg))
+        for component, properties in projects.items():
+            pkg_dst = self._bundle_component_destination(component, properties)
+            if pkg_dst.startswith('src/local'):
+                repository = os.path.join(bundle.downloaded_to, component)
+                subdir = properties.get('copy_to_subdirectory', None)
+                version = properties['version']
+                remote = properties['git']
+                print("Component: '{}' ({}) from repo: {} via cache: {}".format(component, version, remote, repository))
+                self._populate_incr_from_repo(repository,  # TODO: to implement
+                                              subdir=subdir)
+        # log in pack
+        self._bundle_write_properties(projects)
+
+
+    def _bundle_populate_hub(self, bundle):
         """
         Populate hub packages in main pack from bundle in cache_dir.
 
-        :param cache_dir: directory in which to find the cached bundled repositories.
-        :param bundle_info: a dict(package:{info}}, where {info} is the dict of
-            properties concerning the repository of each package,
-            as read in the bundle file.
+        :param bundle: the ial_build.bundle.IALBundle object.
         """
         msg = "Populating vendor packages in pack's hub:"
         print("\n" + msg + "\n" + "-" * len(msg))
-        for package, properties in bundle_info.items():
+        for package, properties in bundle.projects.items():
             pkg_dst = self._bundle_component_destination(package, properties)
             if pkg_dst.startswith('hub'):
-                pkg_src = os.path.join(cache_dir, package)
+                pkg_src = os.path.join(bundle.downloaded_to, package)
                 pkg_dst = os.path.join(self.abspath, pkg_dst, package)
                 version = properties['version']
                 remote = properties['git']
@@ -692,6 +924,11 @@ class Pack(object):
                                  subdir=None,
                                  populate_filter_file=None,
                                  link_filter_file=None):
+        """
+        Populate a main pack src/local with a subproject from its repo.
+
+        :param subdir: if given, populate in src/local/{subdir}/
+        """
         # prepare populate filter
         pop_filter_list = self._read_filter_list('populate',
                                                  populate_filter_file,
@@ -722,12 +959,12 @@ class Pack(object):
                                                   repository)
         self.set_ignored_files_at_linktime(link_filter_list)
 
-    def _bundle_write_properties(self, bundle_info):
+    def _bundle_write_properties(self, projects):
         """Write info into self.origin_filepath."""
         openmode = 'a' if os.path.exists(self.origin_filepath) else 'w'
         with io.open(self.origin_filepath, openmode) as f:
             f.write("\n{} --- populate from bundle successful with:\n".format(now()))
-            for component, properties in bundle_info.items():
+            for component, properties in projects.items():
                 f.write("* {}\n".format(component))
                 f.write("    version: {}\n".format(properties['version']))
                 f.write("    from remote git: {}\n".format(properties['git']))
