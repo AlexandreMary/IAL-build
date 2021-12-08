@@ -19,9 +19,9 @@ class IALBundle(object):
         """
         :param bundle: bundle file (yaml)
         """
-        from ecbundle.parse import Bundle
-        self.file = bundle_file
-        self.ecbundle = Bundle(self.file)
+        from ecbundle.bundle import Bundle
+        self.bundle_file = bundle_file
+        self.ecbundle = Bundle(self.bundle_file)
         self.projects = {}
         for project in self.ecbundle.get('projects'):
             for name, conf in project.items():
@@ -30,7 +30,7 @@ class IALBundle(object):
 
     def download(self,
                  cache_dir=None,
-                 update=False,
+                 update=True,
                  threads=1,
                  no_colour=True,
                  dryrun=False):
@@ -48,20 +48,26 @@ class IALBundle(object):
         if cache_dir is None:
             cache_dir = os.getcwd()
         # downloads
-        b = BundleDownloader(bundle=self.file,
+        b = BundleDownloader(bundle=self.bundle_file,
                              src_dir=cache_dir,
                              update=update,
                              threads=threads,
                              no_colour=no_colour,
                              dryrun=dryrun,
+                             dry_run=dryrun,
                              shallow=False,
                              forced_update=False)
         if b.download() != 0:
             raise RuntimeError("Downloading repositories failed.")
-        self.downloaded_to = b.src_dir
+        self.downloaded_to = b.src_dir()
+
+    def local_project_repo(self, project):
+        """Path to locally downloaded repository of project."""
+        if self.downloaded_to is not None:
+            return os.path.join(self.downloaded_to, project)
 
     def guess_packname(self,
-                       packtype,
+                       pack_type,
                        compiler_label=None,
                        compiler_flag=None,
                        abspath=False,
@@ -70,7 +76,7 @@ class IALBundle(object):
         """
         Guess pack name from a number of arguments.
 
-        :param packtype: type of pack, among ('incr', 'main')
+        :param pack_type: type of pack, among ('incr', 'main')
         :param compiler_label: gmkpack compiler label
         :param compiler_flag: gmkpack compiler flag
         :param abspath: True if the absolute path to pack is requested (instead of basename)
@@ -78,9 +84,9 @@ class IALBundle(object):
         :param to_bin: True if the path to binaries subdirectory is requested
         """
         IAL_git_ref = self.projects['arpifs']['version']
-        IAL_repo_path = self.downloaded_to  # no need to check it has been downloaded, only useful in certain cases
+        IAL_repo_path = self.local_project_repo('arpifs')  # no need to check it has been downloaded, only useful in certain cases
         packname = GmkpackTool.guess_pack_name(IAL_git_ref, compiler_label, compiler_flag,
-                                               pack_type=packtype,
+                                               pack_type=pack_type,
                                                IAL_repo_path=IAL_repo_path)
         # finalisation
         path_elements = [packname]
@@ -109,10 +115,10 @@ class IALBundle(object):
         # prepare IAL arguments for gmkpack
         IAL_git_ref = self.projects['arpifs']['version']
         assert self.downloaded_to is not None, "Bundle projects to be downloaded before creation of pack."
-        IAL_repo_path = os.path.join(self.downloaded_to, 'arpifs')
+        IAL_repo_path = self.local_project_repo('arpifs')
         args = GmkpackTool.getargs(pack_type,
                                    IAL_git_ref,
-                                   IAL_repo_path,                 
+                                   IAL_repo_path,
                                    compiler_label=compiler_label,
                                    compiler_flag=compiler_flag,
                                    homepack=homepack,
@@ -123,12 +129,12 @@ class IALBundle(object):
             print("Creation of pack failed !")
             raise
 
-    def populate_main_pack(self,
-                           pack,
-                           populate_filter_file='__inconfig__',
-                           link_filter_file='__inconfig__'):
+    def populate_pack(self,
+                      pack,
+                      populate_filter_file='__inconfig__',
+                      link_filter_file='__inconfig__'):
         """
-        Populate a main pack with the contents of the bundle's projects.
+        Populate a pack with the contents of the bundle's projects.
 
         :param populate_filter_file: filter file (list of files to be filtered)
             for populate time (defaults from within ial_build package)
@@ -138,34 +144,14 @@ class IALBundle(object):
         assert isinstance(pack, Pack)
         assert self.downloaded_to is not None, "Bundle projects to be downloaded before populating a pack."
         try:
-            pack.bundle_populate_mainpack(self.downloaded_to,
-                                          self.projects,
-                                          populate_filter_file=populate_filter_file,
-                                          link_filter_file=link_filter_file)
-            shutil.copy(self.file, os.path.join(pack.abspath, 'bundle.yml'))
+            pack.bundle_populate(self,
+                                 populate_filter_file=populate_filter_file,
+                                 link_filter_file=link_filter_file)
+            shutil.copy(self.bundle_file, os.path.join(pack.abspath, 'bundle.yml'))
         except Exception:
             print("Failed export of bundle to pack !")
             raise
         else:
-            print("\nSucessful export of bundle: {} to pack: {}".format(self.file, pack.abspath))
-        finally:
-            print("-" * 50)
-
-    def populate_incr_pack(self, pack):
-        """Populate a main pack with the contents of the bundle's projects."""
-        assert isinstance(pack, Pack)
-        assert self.downloaded_to is not None, "Bundle projects to be downloaded before populating a pack."
-        try:
-            raise NotImplementedError("not yet")  # TODO:
-            pack.bundle_populate_mainpack(self.downloaded_to,
-                                          self.projects,
-                                          populate_filter_file=populate_filter_file,
-                                          link_filter_file=link_filter_file)
-            shutil.copy(self.file, os.path.join(pack.abspath, 'bundle.yml'))
-        except Exception:
-            print("Failed export of bundle to pack !")
-            raise
-        else:
-            print("\nSucessful export of bundle: {} to pack: {}".format(self.file, pack.abspath))
+            print("\nSucessful export of bundle: {} to pack: {}".format(self.bundle_file, pack.abspath))
         finally:
             print("-" * 50)

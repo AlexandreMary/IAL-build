@@ -33,7 +33,6 @@ USUAL_BINARIES = ['masterodb', 'bator',
 # The distinction is based on the component having a build system:
 #         - integrated and plugged in gmkpack: package
 #         - no build system, or not plugged in gmkpack: project
-DEFAULT_COMPONENT_DESTINATION = 'src/local'  # default for following MAP
 COMPONENTS_MAP = {'eckit':'hub/local/src/ecSDK',
                   'fckit':'hub/local/src/ecSDK',
                   'ecbuild':'hub/local/src/ecSDK',
@@ -42,8 +41,8 @@ COMPONENTS_MAP = {'eckit':'hub/local/src/ecSDK',
                   'ial':'src/local',
                   # __future__
                   #'atlas':'hub/local/src/Atlas',
-                  #'surfex':'src/local',
-                  #'oops':'src/local'  # ???
+                  #'surfex':'src/local/surfex',
+                  #'oops':'src/local/oops_src'  # ???
                   }
 
 
@@ -57,7 +56,7 @@ class GmkpackTool(object):
     _default_branch_radical = 'main'
     _default_version_number = '00'
     _default_compiler_flag = DEFAULT_PACK_COMPILER_FLAG
-    _OPTIONSPACK_re = re.compile('GMKFILE=(?P<gmkfile>\.+)\s+<= -l (?P<label>\w+)\s+ -o (?P<flag>\w+)$')
+    _OPTIONSPACK_re = re.compile('GMKFILE=(?P<gmkfile>.+)\s+<= -l (?P<label>\w+)\s+ -o (?P<flag>\w+)$')
     OFFICIAL_PACKS_re = IAL_OFFICIAL_PACKS_re
 
     @staticmethod
@@ -65,9 +64,11 @@ class GmkpackTool(object):
         vars_to_unset = ('GMK_USER_PACKNAME_STYLE', 'PACK_EXT', 'PACK_PREFIX')
         for k in vars_to_unset:
             if k in os.environ:
+                print("unset $" + k)
                 del os.environ[k]
         vars_to_set = {'GMK_RELEASE_CASE_SENSITIVE':'1', }
         for k, v in vars_to_set.items():
+            print("export ${}={}".format(k, v))
             os.environ[k] = v
 
     @classmethod
@@ -90,6 +91,7 @@ class GmkpackTool(object):
             arguments_as_list.extend([k, v])
         arguments_as_list.extend(options)
         command = ['gmkpack',] + arguments_as_list
+        print("Now running: " + ' '.join(command))
         if silent:
             with io.open(os.devnull, 'w') as devnull:
                 r = subprocess.check_call(command, stdout=devnull, stderr=devnull)
@@ -102,9 +104,10 @@ class GmkpackTool(object):
         """Scan a 'rootpacks' directory, looking for official releases packs."""
         rootpacks = {}
         for p in os.listdir(directory):
-            m = cls.OFFICIAL_PACKS_re.match(p)
-            if m:
-                rootpacks[p] = m.groupdict()
+            if not os.path.islink(os.path.join(directory, p)):
+                m = cls.OFFICIAL_PACKS_re.match(p)
+                if m:
+                    rootpacks[p] = m.groupdict()
         return rootpacks
 
     @classmethod
@@ -115,6 +118,8 @@ class GmkpackTool(object):
                                 compiler_flag=None):
         """Find rootpacks matching **official_tag**, with according label/flag if requested."""
         rootpacks = cls.scan_rootpacks(rootpacks_directory)
+        compiler_label = cls.get_compiler_label(compiler_label)
+        compiler_flag = cls.get_compiler_flag(compiler_flag)
         matching = {}
         for p in rootpacks.keys():
             if rootpacks[p]['radical'] == 'main':
@@ -124,8 +129,8 @@ class GmkpackTool(object):
                                           rootpacks[p]['radical'],
                                           rootpacks[p]['version'])
             if tag == official_tag:
-                if all(compiler_label in (None, rootpacks[p]['compiler_label']),
-                       compiler_flag in (None, rootpacks[p]['compiler_flag'])):
+                if all([compiler_label in (None, rootpacks[p]['compiler_label']),
+                        compiler_flag in (None, rootpacks[p]['compiler_flag'])]):
                     matching[p] = rootpacks[p]
         return matching
 
@@ -145,6 +150,8 @@ class GmkpackTool(object):
         """Get a ROOTPACK directory from argument, $ROOTPACK if defined, or None."""
         if rootpack in (None, ''):
             rootpack = os.environ.get('ROOTPACK')
+        if rootpack in ('', None):
+            raise ValueError("rootpack must be passed by argument or defined by env variable $ROOTPACK")
         return rootpack if rootpack != '' else None
 
     @classmethod
@@ -160,8 +167,11 @@ class GmkpackTool(object):
                        if f != '']
             for o in options:
                 m = cls._OPTIONSPACK_re.match(o)
-                if m and m.group('gmkfile') == gmkfile:
-                    compiler_label = m.group('label')
+                if m and m.group('gmkfile').strip() == gmkfile:
+                    compiler_label = m.group('label').strip()
+                    break
+        if compiler_label in (None, ''):
+            raise ValueError("Compiler label not found, neither through env ($GMKFILE/optionspack) nor by argument")
         return compiler_label
 
     @classmethod
@@ -171,6 +181,8 @@ class GmkpackTool(object):
             compiler_flag = os.environ.get('GMK_OPT')
             if compiler_flag in (None, ''):
                 compiler_flag = cls._default_compiler_flag
+        if compiler_flag in (None, ''):
+            raise ValueError("Compiler flag not found, neither through env ($GMK_OPT) nor by argument")
         return compiler_flag
 
 # getargs newway methods  -----------------------------------------------------
@@ -220,7 +232,7 @@ class GmkpackTool(object):
         return {'-o':cls.get_compiler_flag(compiler_flag),
                 '-l':cls.get_compiler_label(compiler_label),
                 '-h':cls.get_homepack(homepack)}
- 
+
     @staticmethod
     def incrpack_getargs_from_IAL_git_ref(IAL_git_ref,
                                           IAL_repo_path):
@@ -228,10 +240,12 @@ class GmkpackTool(object):
         from .repositories import IALview
         ial = IALview(IAL_repo_path, IAL_git_ref)
         # ancestor, for root pack
-        ancestor = IAL_OFFICIAL_TAGS_re.match(ial.latest_official_tagged_ancestor).groupdict()
-        return {'-r':ancestor.group('release'),
-                '-b':ancestor.group('radical'),
-                '-v':ancestor.group('version')}
+        ancestor = IAL_OFFICIAL_TAGS_re.match(ial.latest_official_tagged_ancestor)
+        args = {'-r':ancestor.group('release')}
+        if ancestor.group('radical'):
+            args['-b'] = ancestor.group('radical')
+            args['-v'] = ancestor.group('version')
+        return args
 
     @classmethod
     def incrpack_getargs_packname(cls, IAL_git_ref, compiler_label=None, compiler_flag=None):
@@ -251,15 +265,18 @@ class GmkpackTool(object):
         """Get arguments linked to syntax of root pack."""
         from .repositories import IALview
         rootpack = cls.get_rootpack(rootpack)
+        args['-f'] = rootpack
         # ancestor, for root pack
         ial = IALview(IAL_repo_path, IAL_git_ref)
         ancestor = ial.latest_official_tagged_ancestor
         matching = cls.find_matching_rootpacks(rootpack, ancestor, compiler_label, compiler_flag)
         if len(matching) == 1:
             actual_rootpack = matching[list(matching.keys())[0]]
-            args['-g'] = actual_rootpack.get('prefix')
-            args['-e'] = actual_rootpack.get('suffix')
-            lower_case = actual_rootpack.get('radical', '').islower()
+            if actual_rootpack.get('prefix'):
+                args['-g'] = actual_rootpack.get('prefix')
+            if actual_rootpack.get('suffix'):
+                args['-e'] = actual_rootpack.get('suffix')
+            lower_case = actual_rootpack.get('release', '').islower()
             if lower_case:
                 args['-r'] = args['-r'].lower()
             return args
@@ -284,7 +301,7 @@ class GmkpackTool(object):
                 rootpack=None):
         """
         Build args for incremental pack.
-        
+
         :param pack_type: type of pack, among ('incr', 'main')
         :param IAL_git_ref: IAL git reference
         :param IAL_repo_path: IAL repository path
@@ -379,7 +396,7 @@ class GmkpackTool(object):
                                                args['-n'], args['-l'], args['-o'],
                                                args.get('-e', ''))
         elif pack_type == 'incr':
-            return args[-u]
+            return args['-u']
 
     @classmethod
     def guess_pack_name(cls, IAL_git_ref, compiler_label, compiler_flag, pack_type,
@@ -506,12 +523,16 @@ class Pack(object):
         return '-a' not in self.genesis_options
 
     @contextmanager
-    def _cd_local(self):
+    def _cd_local(self, subdir=None):
         """Context: in self._local"""
         owd = os.getcwd()
+        if subdir is None:
+            loc = self._local
+        else:
+            loc = os.path.join(self._local, subdir)
         try:
-            os.chdir(self._local)
-            yield self._local
+            os.chdir(loc)
+            yield loc
         finally:
             os.chdir(owd)
 
@@ -701,20 +722,27 @@ class Pack(object):
 
     # Populate pack ------------------------------------------------------------
 
+    @property
+    def origin_filepath(self):
+        """File in which to find info about origin of the pack."""
+        return os.path.join(self.abspath, '.pygmkpack.populated')
+
     def populate_from_tar(self, tar):
         """Populate the incremental pack with the contents of a **tar** file."""
         with tarfile.open(tar, 'r') as t:
             t.extractall(path=self._local)
 
-    def populate_from_files_in_dir(self, list_of_files, directory):
+    def populate_from_list_of_files_in_dir(self, list_of_files, directory, subdir=None):
         """
-        Populate the incremental pack with the **list_of_files**
-        from a given **directory**.
+        Populate the incremental pack with the **list_of_files** from a given **directory**.
+
+        :param subdir: if given, populate in src/local/subdir/
         """
         directory_abspath = os.path.abspath(directory)
-        with self._cd_local():
+        with self._cd_local(subdir=subdir):
             copy_files_in_cwd(list_of_files, directory_abspath)
 
+    # DEPRECATED:migrate to bundle
     def populate_from_IALview_as_main(self, view,
                                       populate_filter_file=None,
                                       link_filter_file=None):
@@ -734,11 +762,12 @@ class Pack(object):
         """
         from .repositories import IALview
         assert isinstance(view, IALview)
-        self._populate_main_from_repo(view.repository,
-                                      populate_filter_file=populate_filter_file,
-                                      link_filter_file=link_filter_file)
+        self._populate_from_repo_in_bulk(view.repository,
+                                         populate_filter_file=populate_filter_file,
+                                         link_filter_file=link_filter_file)
         self.write_view_info(view)
 
+    # DEPRECATED:migrate to bundle
     def populate_from_IALview_as_incremental(self, view, start_ref=None):
         """
         Populate as incremental pack with contents from a IALview.
@@ -762,7 +791,7 @@ class Pack(object):
             files_to_copy.extend(list(touched_files.get(k, [])))
         for k in ('R', 'C'):
             files_to_copy.extend([f[1] for f in touched_files.get(k, [])])  # new name of renamed or copied files
-        self.populate_from_files_in_dir(files_to_copy, view.repository)
+        self.populate_from_list_of_files_in_dir(files_to_copy, view.repository)
         # files to be ignored/deleted
         files_to_delete = list(touched_files.get('D', []))
         files_to_delete.extend([f[0] for f in touched_files.get('R', [])])  # original name of renamed files
@@ -773,6 +802,7 @@ class Pack(object):
                 raise GitError("Don't know what to do with files which Git status is: " + k)
         self.write_view_info(view)
 
+    # DEPRECATED:migrate to bundle
     def populate_hub(self, latest_main_release):
         """
         Populate hub packages in main pack.
@@ -793,18 +823,15 @@ class Pack(object):
             shutil.copytree(pkg_src, pkg_dst, symlinks=True)
         print("-" * len(msg))
 
-    @property
-    def origin_filepath(self):
-        """File in which to find info about origin of the pack."""
-        return os.path.join(self.abspath, '.pygmkpack.populated')
-
-    def write_view_info(self, view):  # DEPRECATED:migrate to bundle
+    # DEPRECATED:migrate to bundle
+    def write_view_info(self, view):
         """Write view.info into self.origin_filepath."""
         openmode = 'a' if os.path.exists(self.origin_filepath) else 'w'
         with io.open(self.origin_filepath, openmode) as f:
             view.info(out=f)
 
-    def _assert_IALview_compatibility(self, view):  # DEPRECATED:migrate to bundle
+    # DEPRECATED:migrate to bundle
+    def _assert_IALview_compatibility(self, view):
         """Assert that view and pack have the same original node (ancestor)."""
         branch_ancestor_info = view.latest_official_branch_from_main_release
         args = self.genesis_arguments
@@ -822,110 +849,13 @@ class Pack(object):
         else:
             assert args['-b'] == 'main'
 
-    # Populate from bundle -----------------------------------------------------
-
-    def bundle_populate_mainpack(self,
-                                 bundle,
-                                 populate_filter_file=None,
-                                 link_filter_file=None):
+    def _populate_from_repo_in_bulk(self,
+                                    repository,
+                                    subdir=None,
+                                    populate_filter_file=None,
+                                    link_filter_file=None):
         """
-        Populate src/local in main pack from bundle.
-
-        :param bundle: the ial_build.bundle.IALBundle object.
-        :param populate_filter_file: file in which to read the files to be
-            filtered at populate time.
-            Special values:
-            '__inconfig__' will read according file in config of ial_build package;
-            '__inrepo__' will read according file in Git repo
-        :param link_filter_file: file in which to read the files to be
-            filtered at link time.
-            Special values:
-            '__inconfig__' will read according file in config of ial_build package;
-            '__inrepo__' will read according file in Git repo
-        """
-        # hub packages
-        self._bundle_populate_hub(bundle)
-        # src/local
-        msg = "Populating components in pack's src/local:"
-        print("\n" + msg + "\n" + "-" * len(msg))
-        for component, properties in bundle.projects.items():
-            pkg_dst = self._bundle_component_destination(component, properties)
-            if pkg_dst.startswith('src/local'):
-                repository = os.path.join(bundle.downloaded_to, component)
-                subdir = properties.get('copy_to_subdirectory', None)
-                version = properties['version']
-                remote = properties['git']
-                print("Component: '{}' ({}) from repo: {} via cache: {}".format(component, version, remote, repository))
-                self._populate_main_from_repo(repository,
-                                              subdir=subdir,
-                                              populate_filter_file=populate_filter_file,
-                                              link_filter_file=link_filter_file)
-        # log in pack
-        self._bundle_write_properties(projects)
-
-    def bundle_populate_incrpack(self, bundle):
-        """
-        Populate src/local in incr pack from bundle.
-
-        :param bundle: the ial_build.bundle.IALBundle object.
-        """
-        # hub packages: TODO: should we ? or check that it corresponds to root pack
-        self._bundle_populate_hub(bundle)
-        # src/local
-        msg = "Populating components in pack's src/local:"
-        print("\n" + msg + "\n" + "-" * len(msg))
-        for component, properties in projects.items():
-            pkg_dst = self._bundle_component_destination(component, properties)
-            if pkg_dst.startswith('src/local'):
-                repository = os.path.join(bundle.downloaded_to, component)
-                subdir = properties.get('copy_to_subdirectory', None)
-                version = properties['version']
-                remote = properties['git']
-                print("Component: '{}' ({}) from repo: {} via cache: {}".format(component, version, remote, repository))
-                self._populate_incr_from_repo(repository,  # TODO: to implement
-                                              subdir=subdir)
-        # log in pack
-        self._bundle_write_properties(projects)
-
-
-    def _bundle_populate_hub(self, bundle):
-        """
-        Populate hub packages in main pack from bundle in cache_dir.
-
-        :param bundle: the ial_build.bundle.IALBundle object.
-        """
-        msg = "Populating vendor packages in pack's hub:"
-        print("\n" + msg + "\n" + "-" * len(msg))
-        for package, properties in bundle.projects.items():
-            pkg_dst = self._bundle_component_destination(package, properties)
-            if pkg_dst.startswith('hub'):
-                pkg_src = os.path.join(bundle.downloaded_to, package)
-                pkg_dst = os.path.join(self.abspath, pkg_dst, package)
-                version = properties['version']
-                remote = properties['git']
-                print("Package: '{}' (v{}) from repo: {} via cache: {}".format(package, version, remote, pkg_src))
-                shutil.copytree(pkg_src, pkg_dst, symlinks=True)
-
-    def _bundle_component_destination(self, component, properties):
-        """
-        Distinction between 'projects' (in src/local) and 'packages' (in hub),
-        as specified in bundle (attribute 'gmkpack') or parameterized.
-
-        The distinction is based on the component having a build system:
-        - integrated and plugged in gmkpack: package
-        - no build system, or not plugged in gmkpack: project
-        """
-        return properties.get('gmkpack',
-                              COMPONENTS_MAP.get(component.lower(),
-                                                 DEFAULT_COMPONENT_DESTINATION))
-
-    def _populate_main_from_repo(self,
-                                 repository,
-                                 subdir=None,
-                                 populate_filter_file=None,
-                                 link_filter_file=None):
-        """
-        Populate a main pack src/local with a subproject from its repo.
+        Populate a main pack src/local/ with the contents of a repo.
 
         :param subdir: if given, populate in src/local/{subdir}/
         """
@@ -959,15 +889,289 @@ class Pack(object):
                                                   repository)
         self.set_ignored_files_at_linktime(link_filter_list)
 
+    # Populate from bundle -----------------------------------------------------
+
+    def bundle_populate_component(self,
+                                  component,
+                                  bundle,
+                                  populate_filter_file=None,
+                                  link_filter_file=None):
+        """
+        Populate src/local in incr pack from bundle.
+
+        :param bundle: the ial_build.bundle.IALBundle object.
+        :param populate_filter_file: file in which to read the files to be
+            filtered at populate time.
+            Special values:
+            '__inconfig__' will read according file in config of ial_build package;
+            '__inrepo__' will read according file in Git repo
+        :param link_filter_file: file in which to read the files to be
+            filtered at link time.
+            Special values:
+            '__inconfig__' will read according file in config of ial_build package;
+            '__inrepo__' will read according file in Git repo
+        """
+        config = bundle.projects[component]
+        pkg_dst = self._bundle_component_destination(component, config)
+        repository = bundle.local_project_repo(component)
+        if pkg_dst.startswith('hub'):
+            # packages auto-compiled, in hub
+            print("Hub Package: '{}' ({}) from repo: {} via cache: {}".format(component,
+                                                                              config['version'],
+                                                                              config['git'],
+                                                                              repository))
+            if self.is_incremental:
+                print("!-> Incremental hub packages is currently not an available feature: populated in bulk")
+            pkg_dst = os.path.join(self.abspath, pkg_dst, component)
+            shutil.copytree(repository, pkg_dst, symlinks=True)
+        elif pkg_dst.startswith('src/local'):
+            # components to be compiled with gmkpack, in src/local
+            print("Component: '{}' ({}) from repo: {} via cache: {}".format(component,
+                                                                            config['version'],
+                                                                            config['git'],
+                                                                            repository))
+            subdir = os.path.split(pkg_dst)
+            if len(subdir) > 2:
+                subdir = subdir[2]
+            else:
+                subdir = None
+            if not self.is_incremental or self.initial_version_of_component(component) is None:
+                # main pack, or not able to determine an increment: bulk
+                if self.is_incremental:
+                    print("! Could not find initial version of component '{}'".format(component),
+                          "in root pack: populate in bulk")
+                self._populate_from_repo_in_bulk(repository,
+                                                 subdir=subdir,
+                                                 populate_filter_file=populate_filter_file,
+                                                 link_filter_file=link_filter_file)
+            else:
+                # incremental pack
+                self._populate_from_repo_as_incremental_component(repository,
+                                                                  self.initial_version_of_component(component),
+                                                                  subdir=subdir)
+
+    def initial_version_of_component(self, component):
+        """
+        In an incremenal pack, guess the initial version of **component** in the root pack.
+        """
+        if component.lower() in ('arpifs', 'ial'):
+            version = self.tag_of_latest_official_ancestor
+        # elif component == ...
+        # implement here whenever src/local components are introduced in bundle
+        else:
+            version = None  # this will turn component to be populated in bulk rather than as increment
+        return version
+
+    def _populate_from_repo_as_incremental_component(self,
+                                                     repository,
+                                                     initial_version,
+                                                     populating_version='HEAD',
+                                                     subdir=None):
+        """
+        Populate the incremental pack with the diff between **initial_version** and **populating_version**
+        from **repository**.
+
+        :param subdir: if given, populate in src/local/subdir/ (otherwise src/local/)
+        """
+        from .repositories import GitProxy
+        repo = GitProxy(repository)
+        touched_files = repo.touched_between(initial_version, populating_version)
+        # files to be copied
+        files_to_copy = []
+        for k in ('A', 'M', 'T'):
+            files_to_copy.extend(list(touched_files.get(k, [])))
+        for k in ('R', 'C'):
+            files_to_copy.extend([f[1] for f in touched_files.get(k, [])])  # new name of renamed or copied files
+        self.populate_from_list_of_files_in_dir(files_to_copy, repository, subdir=subdir)
+        # files to be ignored/deleted
+        files_to_delete = list(touched_files.get('D', []))
+        files_to_delete.extend([f[0] for f in touched_files.get('R', [])])  # original name of renamed files
+        self.write_ignored_files_at_compiletime(files_to_delete)
+        # files of unknown status
+        for k in ('U', 'X', 'B'):
+            if k in touched_files:
+                raise GitError("Don't know what to do with files which Git status is: " + k)
+
+    def bundle_populate(self,
+                        bundle,
+                        populate_filter_file=None,
+                        link_filter_file=None):
+        """
+        Populate pack from bundle.
+
+        :param bundle: the ial_build.bundle.IALBundle object.
+        :param populate_filter_file: file in which to read the files to be
+            filtered at populate time.
+            Special values:
+            '__inconfig__' will read according file in config of ial_build package;
+            '__inrepo__' will read according file in Git repo
+        :param link_filter_file: file in which to read the files to be
+            filtered at link time.
+            Special values:
+            '__inconfig__' will read according file in config of ial_build package;
+            '__inrepo__' will read according file in Git repo
+        """
+        hub_components = {component:config for component, config in bundle.projects.items()
+                          if self._bundle_component_destination(component, config).startswith('hub')}
+        gmkpack_components = {component:config for component, config in bundle.projects.items()
+                              if self._bundle_component_destination(component, config).startswith('src/local')}
+        # start with hub:
+        msg = "Populating components in pack's hub:"
+        print("\n" + msg + "\n" + "-" * len(msg))
+        for component, config in hub_components.items():
+            self.bundle_populate_component(component,
+                                           bundle,
+                                           populate_filter_file=populate_filter_file,
+                                           link_filter_file=link_filter_file)
+        # then src/local components:
+        msg = "Populating components in pack's src/local:"
+        print("\n" + msg + "\n" + "-" * len(msg))
+        for component, config in gmkpack_components.items():
+            self.bundle_populate_component(component,
+                                           bundle,
+                                           populate_filter_file=populate_filter_file,
+                                           link_filter_file=link_filter_file)
+        # log in pack
+        self._bundle_write_properties(bundle.projects)
+
+    # FIXME: clean !
+    def bundle_populate_mainpack(self,
+                                 bundle,
+                                 populate_filter_file=None,
+                                 link_filter_file=None):
+        """
+        Populate src/local in main pack from bundle.
+
+        :param bundle: the ial_build.bundle.IALBundle object.
+        :param populate_filter_file: file in which to read the files to be
+            filtered at populate time.
+            Special values:
+            '__inconfig__' will read according file in config of ial_build package;
+            '__inrepo__' will read according file in Git repo
+        :param link_filter_file: file in which to read the files to be
+            filtered at link time.
+            Special values:
+            '__inconfig__' will read according file in config of ial_build package;
+            '__inrepo__' will read according file in Git repo
+        """
+        assert not self.is_incremental
+        # hub packages
+        self._bundle_populate_hub(bundle)
+        # src/local
+        msg = "Populating components in pack's src/local:"
+        print("\n" + msg + "\n" + "-" * len(msg))
+        for component, config in bundle.projects.items():
+            pkg_dst = self._bundle_component_destination(component, config)
+            if pkg_dst.startswith('src/local'):
+                repository = bundle.local_project_repo(component)
+                subdir = config.get('copy_to_subdirectory', None)
+                print("Package: '{}' ({}) from repo: {} via cache: {}".format(component,
+                                                                              config['version'],
+                                                                              config['git'],
+                                                                              repository))
+                self._populate_from_repo_in_bulk(repository,
+                                                 subdir=subdir,
+                                                 populate_filter_file=populate_filter_file,
+                                                 link_filter_file=link_filter_file)
+        # log in pack
+        self._bundle_write_properties(bundle.projects)
+
+    # FIXME: clean !
+    def bundle_populate_incrpack(self,
+                                 bundle,
+                                 populate_filter_file=None,
+                                 link_filter_file=None):
+        """
+        Populate src/local in incr pack from bundle.
+
+        :param bundle: the ial_build.bundle.IALBundle object.
+        :param populate_filter_file: file in which to read the files to be
+            filtered at populate time.
+            Special values:
+            '__inconfig__' will read according file in config of ial_build package;
+            '__inrepo__' will read according file in Git repo
+        :param link_filter_file: file in which to read the files to be
+            filtered at link time.
+            Special values:
+            '__inconfig__' will read according file in config of ial_build package;
+            '__inrepo__' will read according file in Git repo
+        """
+        assert self.is_incremental
+        # hub packages: TODO: should we ? or check that it corresponds to root pack
+        self._bundle_populate_hub(bundle)
+        # src/local
+        msg = "Populating components in pack's src/local:"
+        print("\n" + msg + "\n" + "-" * len(msg))
+        for component, in bundle.projects.items():
+            pkg_dst = self._bundle_component_destination(component, config)
+            if pkg_dst.startswith('src/local'):
+                version_in_main = self._version_of_component_in_main(component)
+                repository = bundle.local_project_repo(component)
+                subdir = config.get('copy_to_subdirectory', None)
+                print("Package: '{}' ({}) from repo: {} via cache: {}".format(component,
+                                                                              config['version'],
+                                                                              config['git'],
+                                                                              repository))
+                if version_in_main is not None:
+                    list_of_files = bundle.git_diff(component, version_in_main)
+                    self._populate_from_repo_as_incremental_component(component,
+                                                                      bundle.local_project_repo(component),
+                                                                      start_version=version_in_main)
+                else:
+                    # populate in bulk
+                    self._populate_from_repo_in_bulk(repository,
+                                                     subdir=subdir,
+                                                     populate_filter_file=populate_filter_file,
+                                                     link_filter_file=link_filter_file)
+        # TODO:
+        # log in pack
+        self._bundle_write_properties(projects)
+
+    # FIXME: clean !
+    def _bundle_populate_hub(self, bundle):
+        """
+        Populate hub packages in main pack from bundle in cache_dir.
+
+        :param bundle: the ial_build.bundle.IALBundle object.
+        """
+        msg = "Populating vendor packages in pack's hub:"
+        print("\n" + msg + "\n" + "-" * len(msg))
+        for project, config in bundle.projects.items():
+            pkg_dst = self._bundle_component_destination(project, config)
+            if pkg_dst.startswith('hub'):
+                pkg_src = os.path.join(bundle.downloaded_to, project)
+                pkg_dst = os.path.join(self.abspath, pkg_dst, project)
+                print("Package: '{}' ({}) from repo: {} via cache: {}".format(project,
+                                                                              config['version'],
+                                                                              config['git'],
+                                                                              pkg_src))
+                shutil.copytree(pkg_src, pkg_dst, symlinks=True)
+
+    def _bundle_component_destination(self, component, config):
+        """
+        Distinction between 'projects' (in src/local) and 'packages' (in hub),
+        as specified in bundle (attribute 'gmkpack') or parameterized.
+
+        The distinction is based on the component having a build system:
+        - integrated and plugged in gmkpack: package
+        - no build system, or not plugged in gmkpack: project
+        """
+        destination = config.get('gmkpack', COMPONENTS_MAP.get(component.lower(), None))
+        assert destination is not None, ' '.join(["Destination of component '{}' within gmkpack is unknown,",
+                                                  "please indicate in bundle file through attribute 'gmkpack',",
+                                                  "e.g. gmkpack = src/local/oops or",
+                                                  "hub/local/src/ecSDK"]).format(component)
+        return destination
+
     def _bundle_write_properties(self, projects):
         """Write info into self.origin_filepath."""
         openmode = 'a' if os.path.exists(self.origin_filepath) else 'w'
         with io.open(self.origin_filepath, openmode) as f:
             f.write("\n{} --- populate from bundle successful with:\n".format(now()))
-            for component, properties in projects.items():
-                f.write("* {}\n".format(component))
-                f.write("    version: {}\n".format(properties['version']))
-                f.write("    from remote git: {}\n".format(properties['git']))
+            for project, config in projects.items():
+                f.write("* {}\n".format(project))
+                f.write("    version: {}\n".format(config['version']))
+                f.write("    from remote git: {}\n".format(config['git']))
 
     # Filters ------------------------------------------------------------------
 
