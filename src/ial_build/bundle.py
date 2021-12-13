@@ -11,6 +11,50 @@ import copy
 import shutil
 
 from .pygmkpack import Pack, GmkpackTool
+from .config import DEFAULT_BUNDLE_CACHE_DIR
+
+
+def bundle2pack(bundle_file,
+                pack_type='incr',
+                preexisting_pack=False,
+                clean_if_preexisting=False,
+                cache_dir=DEFAULT_BUNDLE_CACHE_DIR,
+                compiler_label=None,
+                compiler_flag=None,
+                homepack=None,
+                rootpack=None):
+    """
+    Make a pack out of a bundle.
+
+    :param pack_type: type of pack, among ('incr', 'main')
+    :param preexisting_pack: assume the pack already preexists
+    :param clean_if_preexisting: if True, call cleanpack before populating a preexisting pack
+    :param cache_dir: cache directory in which to download/update repositories
+    :param compiler_label: Gmkpack's compiler label to be used
+    :param compiler_flag: Gmkpack's compiler flag to be used
+    :param homepack: directory in which to build pack
+    :param rootpack: diretory in which to look for root pack (incr packs only)
+    """
+    b = IALBundle(bundle_file)
+    b.download(cache_dir=cache_dir)
+    if not preexisting_pack:
+        pack = b.create_pack(pack_type,
+                             compiler_label=compiler_label,
+                             compiler_flag=compiler_flag,
+                             homepack=homepack,
+                             rootpack=rootpack)
+    else:
+        packname = b.guess_packname(pack_type,
+                                    compiler_label=compiler_label,
+                                    compiler_flag=compiler_flag,
+                                    homepack=homepack)
+        pack = Pack(packname,
+                    homepack=GmkpackTool.get_homepack(homepack))
+        if clean_if_preexisting:
+            pack.cleanpack()
+    pack.bundle_populate(b)
+    print("Pack successfully populated: " + pack.abspath)
+    return pack
 
 
 class IALBundle(object):
@@ -29,7 +73,7 @@ class IALBundle(object):
         self.downloaded_to = None
 
     def download(self,
-                 cache_dir=None,
+                 cache_dir=DEFAULT_BUNDLE_CACHE_DIR,
                  update=True,
                  threads=1,
                  no_colour=True,
@@ -131,11 +175,13 @@ class IALBundle(object):
 
     def populate_pack(self,
                       pack,
+                      cleanpack=False,
                       populate_filter_file='__inconfig__',
                       link_filter_file='__inconfig__'):
         """
         Populate a pack with the contents of the bundle's projects.
 
+        :param cleanpack: if True, call cleanpack before populating
         :param populate_filter_file: filter file (list of files to be filtered)
             for populate time (defaults from within ial_build package)
         :param link_filter_file: filter file (list of files to be filtered)
@@ -145,9 +191,9 @@ class IALBundle(object):
         assert self.downloaded_to is not None, "Bundle projects to be downloaded before populating a pack."
         try:
             pack.bundle_populate(self,
+                                 cleanpack=cleanpack,
                                  populate_filter_file=populate_filter_file,
                                  link_filter_file=link_filter_file)
-            shutil.copy(self.bundle_file, os.path.join(pack.abspath, 'bundle.yml'))
         except Exception:
             print("Failed export of bundle to pack !")
             raise

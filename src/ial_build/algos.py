@@ -26,7 +26,7 @@ def guess_packname(git_ref,
                    to_bin=False):
     """
     Guess pack name from a number of arguments.
-    
+
     :param git_ref: Git reference to be exported to pack
     :param packtype: type of pack, among ('incr', 'main')
     :param compiler_label: gmkpack compiler label
@@ -86,8 +86,8 @@ def IAL_gitref_to_incrpack(repository,
         packname = git_ref
     elif packname == '__guess__':
         packname = guess_packname(git_ref,
+                                  compiler_label,
                                   'incr',
-                                  compiler_label=compiler_label,
                                   compiler_flag=compiler_flag)
     print("-" * 50)
     print("Start export of git ref: '{}' to incremental pack: '{}'".format(git_ref, packname))
@@ -200,6 +200,58 @@ def IAL_gitref_to_main_pack(repository,
         print("Sucessful export of git ref: {} to pack: {}".format(git_ref, pack.abspath))
     finally:
         print("-" * 50)
+    return pack
+
+
+def IALgitref2pack(IAL_git_ref,
+                   IAL_repo_path,
+                   pack_type='incr',
+                   preexisting_pack=False,
+                   clean_if_preexisting=False,
+                   compiler_label=None,
+                   compiler_flag=None,
+                   homepack=None,
+                   rootpack=None):
+    """
+    Make a pack out of a bundle.
+
+    :param pack_type: type of pack, among ('incr', 'main')
+    :param preexisting_pack: assume the pack already preexists
+    :param clean_if_preexisting: if True, call cleanpack before populating a preexisting pack
+    :param compiler_label: Gmkpack's compiler label to be used
+    :param compiler_flag: Gmkpack's compiler flag to be used
+    :param homepack: directory in which to build pack
+    :param rootpack: diretory in which to look for root pack (incr packs only)
+    """
+    # pack
+    if not preexisting_pack:
+        args = GmkpackTool.getargs(pack_type,
+                                   IAL_git_ref,
+                                   IAL_repo_path,
+                                   compiler_label=compiler_label,
+                                   compiler_flag=compiler_flag,
+                                   homepack=homepack,
+                                   rootpack=rootpack)
+        try:
+            pack = GmkpackTool.create_pack_from_args(args, pack_type)
+        except Exception:
+            print("Creation of pack failed !")
+            raise
+    else:
+        packname = GmkpackTool.guess_pack_name(IAL_git_ref, compiler_label, compiler_flag,
+                                               pack_type=pack_type,
+                                               IAL_repo_path=IAL_repo_path)
+        pack = Pack(packname,
+                    homepack=GmkpackTool.get_homepack(homepack))
+        if clean_if_preexisting:
+            pack.cleanpack()
+    # then populate
+    view = IALview(IAL_repo_path, IAL_git_ref)
+    if pack_type == 'main':
+        pack.populate_from_IALview_as_main(view)
+    elif pack_type == 'incr':
+        pack.populate_from_IALview_as_incremental(view)
+    print("Pack successfully populated: " + pack.abspath)
     return pack
 
 

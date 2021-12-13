@@ -117,6 +117,7 @@ class GmkpackTool(object):
                                 compiler_label=None,
                                 compiler_flag=None):
         """Find rootpacks matching **official_tag**, with according label/flag if requested."""
+        print("Find packs matching with ancestor '{}' in: {}".format(official_tag, rootpacks_directory))
         rootpacks = cls.scan_rootpacks(rootpacks_directory)
         compiler_label = cls.get_compiler_label(compiler_label)
         compiler_flag = cls.get_compiler_flag(compiler_flag)
@@ -453,7 +454,7 @@ class GmkpackTool(object):
                                                     compiler_flag=compiler_flag,
                                                     rootpack=rootpack,
                                                     homepack=homepack)
-        return cls.create_pack_from_args(args, 'main', silent=silent)
+        return cls.create_pack_from_args(args, 'incr', silent=silent)
 
     @classmethod
     def new_main_pack(cls,
@@ -744,8 +745,8 @@ class Pack(object):
 
     # DEPRECATED:migrate to bundle
     def populate_from_IALview_as_main(self, view,
-                                      populate_filter_file=None,
-                                      link_filter_file=None):
+                                      populate_filter_file='__inconfig__',
+                                      link_filter_file='__inconfig__'):
         """
         Populate main pack with contents from a IALview.
 
@@ -779,7 +780,10 @@ class Pack(object):
         from .repositories import IALview, GitError
         assert isinstance(view, IALview)
         if start_ref is None:
-            self._assert_IALview_compatibility(view)
+            assert self.tag_of_latest_official_ancestor == view.latest_official_tagged_ancestor, \
+                "Latest official ancestor differ in pack ({}) and repository ({})".format(
+                    self.tag_of_latest_official_ancestor, view.latest_official_tagged_ancestor)
+            #self._assert_IALview_compatibility(view)
             touched_files = view.touched_files_since_latest_official_tagged_ancestor
         else:
             touched_files = view.touched_files_since(start_ref)
@@ -852,12 +856,22 @@ class Pack(object):
     def _populate_from_repo_in_bulk(self,
                                     repository,
                                     subdir=None,
-                                    populate_filter_file=None,
-                                    link_filter_file=None):
+                                    populate_filter_file='__inconfig__',
+                                    link_filter_file='__inconfig__'):
         """
         Populate a main pack src/local/ with the contents of a repo.
 
         :param subdir: if given, populate in src/local/{subdir}/
+        :param populate_filter_file: file in which to read the files to be
+            filtered at populate time.
+            Special values:
+            '__inconfig__' will read according file in config of ial_build package;
+            '__inrepo__' will read according file in Git repo
+        :param link_filter_file: file in which to read the files to be
+            filtered at link time.
+            Special values:
+            '__inconfig__' will read according file in config of ial_build package;
+            '__inrepo__' will read according file in Git repo
         """
         # prepare populate filter
         pop_filter_list = self._read_filter_list('populate',
@@ -894,8 +908,8 @@ class Pack(object):
     def bundle_populate_component(self,
                                   component,
                                   bundle,
-                                  populate_filter_file=None,
-                                  link_filter_file=None):
+                                  populate_filter_file='__inconfig__',
+                                  link_filter_file='__inconfig__'):
         """
         Populate src/local in incr pack from bundle.
 
@@ -994,12 +1008,14 @@ class Pack(object):
 
     def bundle_populate(self,
                         bundle,
-                        populate_filter_file=None,
-                        link_filter_file=None):
+                        cleanpack=False,
+                        populate_filter_file='__inconfig__',
+                        link_filter_file='__inconfig__'):
         """
         Populate pack from bundle.
 
         :param bundle: the ial_build.bundle.IALBundle object.
+        :param cleanpack: if True, call cleanpack before populating
         :param populate_filter_file: file in which to read the files to be
             filtered at populate time.
             Special values:
@@ -1011,6 +1027,8 @@ class Pack(object):
             '__inconfig__' will read according file in config of ial_build package;
             '__inrepo__' will read according file in Git repo
         """
+        if cleanpack:
+            self.cleanpack()
         hub_components = {component:config for component, config in bundle.projects.items()
                           if self._bundle_component_destination(component, config).startswith('hub')}
         gmkpack_components = {component:config for component, config in bundle.projects.items()
@@ -1033,12 +1051,13 @@ class Pack(object):
                                            link_filter_file=link_filter_file)
         # log in pack
         self._bundle_write_properties(bundle.projects)
+        shutil.copy(bundle.bundle_file, os.path.join(self.abspath, 'bundle.yml'))
 
     # FIXME: clean !
     def bundle_populate_mainpack(self,
                                  bundle,
-                                 populate_filter_file=None,
-                                 link_filter_file=None):
+                                 populate_filter_file='__inconfig__',
+                                 link_filter_file='__inconfig__'):
         """
         Populate src/local in main pack from bundle.
 
@@ -1079,8 +1098,8 @@ class Pack(object):
     # FIXME: clean !
     def bundle_populate_incrpack(self,
                                  bundle,
-                                 populate_filter_file=None,
-                                 link_filter_file=None):
+                                 populate_filter_file='__inconfig__',
+                                 link_filter_file='__inconfig__'):
         """
         Populate src/local in incr pack from bundle.
 
@@ -1105,7 +1124,7 @@ class Pack(object):
         for component, in bundle.projects.items():
             pkg_dst = self._bundle_component_destination(component, config)
             if pkg_dst.startswith('src/local'):
-                version_in_main = self._version_of_component_in_main(component)
+                version_in_main = self.initial_version_of_component(component)
                 repository = bundle.local_project_repo(component)
                 subdir = config.get('copy_to_subdirectory', None)
                 print("Package: '{}' ({}) from repo: {} via cache: {}".format(component,

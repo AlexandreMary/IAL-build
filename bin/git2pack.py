@@ -12,7 +12,8 @@ import sys
 repo_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 sys.path.insert(0, os.path.join(repo_path, 'src'))
 
-from ial_build.algos import IAL_gitref_to_incrpack, IAL_gitref_to_main_pack, parse_programs
+from ial_build.algos import parse_programs, IALgitref2pack
+from ial_build.pygmkpack import GmkpackTool
 from ial_build.config import DEFAULT_IAL_REPO
 
 DEFAULT_COMPILER_FLAG = os.environ.get('GMK_OPT', '2y')
@@ -23,12 +24,8 @@ if __name__ == '__main__':
     parser.add_argument('git_ref',
                         help='Git ref: branch or tag.')
     parser.add_argument('-l', '--compiler_label',
-                        required=True,
+                        default=GmkpackTool.get_compiler_label(),
                         help='Compiler label.')
-    parser.add_argument('--fetch',
-                        help='Fetch remote beforehand.',
-                        action='store_true',
-                        default=False)
     parser.add_argument('-o', '--compiler_flag',
                         help='Compiler flag.',
                         default=DEFAULT_COMPILER_FLAG)
@@ -40,9 +37,6 @@ if __name__ == '__main__':
                         action='store_true',
                         help='Assume the pack already preexists.',
                         default=False)
-    parser.add_argument('--start_ref',
-                        help='Specify a Git reference, from which increment of modifications starts. Use with precaution !.',
-                        default=None)
     parser.add_argument('-c', '--clean_if_preexisting',
                         action='store_true',
                         help='Call cleanpack.',
@@ -53,19 +47,6 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--programs',
                         help="Programs which ics_{p} script to be generated, e.g. 'masterodb' or 'masterodb,bator'",
                         default='')
-    name = parser.add_mutually_exclusive_group()
-    name.add_argument('--packname',
-                      help='Force pack name (disadvised, and ignored for main packs).',
-                      default='__guess__')
-    name.add_argument('--prefix',
-                      help='Force prefix (before release) in pack name. Main packs only. Defaults to user from git_ref. "" for no prefix',
-                      default='__user__')
-    parser.add_argument('--populate_filter_file',
-                        help='Filter file (list of files to be filtered) for populate time (defaults from within ial_build package).',
-                        default='__inconfig__')
-    parser.add_argument('--link_filter_file',
-                        help='Filter file (list of files to be filtered) for link time (defaults from within ial_build package).',
-                        default='__inconfig__')
     parser.add_argument('--homepack',
                         default=None,
                         help='To specify a home directory for packs (defaults to $HOMEPACK or $HOME/pack)')
@@ -73,40 +54,15 @@ if __name__ == '__main__':
                         help="Home of root packs to start from, for incremental packs. Cf. Gmkpack's $ROOTPACK",
                         default=None)
     args = parser.parse_args()
-
-    assert args.compiler_label not in ('', None), "You must provide a compiler label (option -l or $GMKFILE)."
-    if args.packtype == 'incr':
-        if args.prefix != '__user__':
-            print("Incr pack: argument --prefix ignored.")
-        pack = IAL_gitref_to_incrpack(args.repository,
-                                      args.git_ref,
-                                      args.compiler_label,
-                                      compiler_flag=args.compiler_flag,
-                                      packname=args.packname,
-                                      preexisting_pack=args.preexisting_pack,
-                                      clean_if_preexisting=args.clean_if_preexisting,
-                                      homepack=args.homepack,
-                                      rootpack=args.rootpack,
-                                      silent=False,
-                                      ask_confirmation=True,
-                                      remove_ics_=False,
-                                      fetch=args.fetch,
-                                      start_ref=args.start_ref)
-    else:
-        if args.packname != '__guess__':
-            print("Main pack: argument --packname ignored.")
-        pack = IAL_gitref_to_main_pack(args.repository,
-                                       args.git_ref,
-                                       args.compiler_label,
-                                       compiler_flag=args.compiler_flag,
-                                       homepack=args.homepack,
-                                       populate_filter_file=args.populate_filter_file,
-                                       link_filter_file=args.link_filter_file,
-                                       silent=False,
-                                       ask_confirmation=True,
-                                       prefix=args.prefix,
-                                       remove_ics_=False,
-                                       fetch=args.fetch)
+    pack = IALgitref2pack(args.git_ref,
+                          args.repository,
+                          pack_type=args.packtype,
+                          preexisting_pack=args.preexisting_pack,
+                          clean_if_preexisting=args.clean_if_preexisting,
+                          compiler_label=args.compiler_label,
+                          compiler_flag=args.compiler_flag,
+                          homepack=args.homepack,
+                          rootpack=args.rootpack)
     if args.programs != '':
         for p in parse_programs(args.programs):
             pack.ics_build_for(p, GMK_THREADS=4)
