@@ -100,7 +100,7 @@ class IALBundle(object):
                              dryrun=dryrun,
                              dry_run=dryrun,
                              shallow=False,
-                             forced_update=False)
+                             forced_update=update)
         if b.download() != 0:
             raise RuntimeError("Downloading repositories failed.")
         self.downloaded_to = b.src_dir()
