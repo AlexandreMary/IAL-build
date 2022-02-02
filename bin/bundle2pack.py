@@ -12,8 +12,7 @@ import sys
 repo_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 sys.path.insert(0, os.path.join(repo_path, 'src'))
 
-from ial_build.algos import parse_programs
-from ial_build.bundle import bundle2pack
+from ial_build.algos import bundle2pack
 from ial_build.pygmkpack import GmkpackTool
 from ial_build.config import DEFAULT_BUNDLE_CACHE_DIR
 
@@ -79,5 +78,5 @@ if __name__ == '__main__':
                        homepack=args.homepack,
                        rootpack=args.rootpack)
     if args.programs != '':
-        for p in parse_programs(args.programs):
+        for p in GmkpackTool.parse_programs(args.programs):
             pack.ics_build_for(p, GMK_THREADS=4)

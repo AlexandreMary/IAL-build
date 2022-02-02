@@ -306,7 +306,8 @@ class GitProxy(object):
             if line[0] in ('A', 'M', 'T', 'D'):
                 asdict[line[0]].add(line[2:].strip())
             elif line[0] in ('C', 'R'):
-                asdict[line[0]].add(tuple(line.split()[1:3]))
+                #asdict[line[0]].add(tuple(line.split()[1:3]))
+                asdict[line[0]].add(tuple(line.split()[1::2]))  # file1 -> file2
             else:
                 asdict[line[0]].add(line)  # FIXME: don't know how to interpret this
         for k in list(asdict.keys()):
@@ -424,7 +425,6 @@ class GitProxy(object):
 
 class IALview(object):
     """Utilities around IAL repository."""
-    #_re_official_tags = re.compile('(?P<r>CY\d{2}((T|R)\d)?)(_(?P<b>.+)\.(?P<v>\d+))?$')
     _re_official_tags = IAL_OFFICIAL_TAGS_re
     _re_branches = IAL_BRANCHES_re
 

@@ -25,8 +25,8 @@ DEFAULT_BUNDLE_CACHE_DIR = os.path.join(os.environ['HOME'], 'bundles')
 
 DEFAULT_IAL_REPO = os.environ.get('DEFAULT_IAL_REPO')
 if DEFAULT_IAL_REPO in ('', None):
-    GIT_HOMEPACK = os.environ.get('GIT_HOMEPACK', os.path.join(os.environ['HOME'], 'repositories'))
-    DEFAULT_IAL_REPO = os.path.join(GIT_HOMEPACK, 'IAL')
+    _git_homepack = os.environ.get('GIT_HOMEPACK', os.path.join(os.environ['HOME'], 'repositories'))
+    DEFAULT_IAL_REPO = os.path.join(_git_homepack, 'IAL')
 DEFAULT_PACK_COMPILER_FLAG = '2y'
 
 # temporary => UNTIL USE OF BUNDLE

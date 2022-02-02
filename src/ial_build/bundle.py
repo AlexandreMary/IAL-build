@@ -7,56 +7,10 @@ Utility to deal with bundles in sight of their build.
 import six
 import json
 import os
-import copy
-import shutil
 
 from .pygmkpack import Pack, GmkpackTool
 from .config import DEFAULT_BUNDLE_CACHE_DIR
-
-
-def bundle2pack(bundle_file,
-                pack_type='incr',
-                update=True,
-                preexisting_pack=False,
-                clean_if_preexisting=False,
-                cache_dir=DEFAULT_BUNDLE_CACHE_DIR,
-                compiler_label=None,
-                compiler_flag=None,
-                homepack=None,
-                rootpack=None):
-    """
-    Make a pack out of a bundle.
-
-    :param pack_type: type of pack, among ('incr', 'main')
-    :param preexisting_pack: assume the pack already preexists
-    :param clean_if_preexisting: if True, call cleanpack before populating a preexisting pack
-    :param cache_dir: cache directory in which to download/update repositories
-    :param compiler_label: Gmkpack's compiler label to be used
-    :param compiler_flag: Gmkpack's compiler flag to be used
-    :param homepack: directory in which to build pack
-    :param rootpack: diretory in which to look for root pack (incr packs only)
-    """
-    b = IALBundle(bundle_file)
-    b.download(cache_dir=cache_dir,
-               update=update)
-    if not preexisting_pack:
-        pack = b.create_pack(pack_type,
-                             compiler_label=compiler_label,
-                             compiler_flag=compiler_flag,
-                             homepack=homepack,
-                             rootpack=rootpack)
-    else:
-        packname = b.guess_packname(pack_type,
-                                    compiler_label=compiler_label,
-                                    compiler_flag=compiler_flag,
-                                    homepack=homepack)
-        pack = Pack(packname,
-                    homepack=GmkpackTool.get_homepack(homepack))
-        if clean_if_preexisting:
-            pack.cleanpack()
-    pack.bundle_populate(b)
-    print("Pack successfully populated: " + pack.abspath)
-    return pack
+from .repositories import GitProxy
 
 
 class IALBundle(object):
@@ -90,7 +44,7 @@ class IALBundle(object):
 
         Returns (src_dir, parsed_bundle)
         """
-        from ecbundle import BundleDownloader, BundleCreator
+        from ecbundle import BundleDownloader
         if cache_dir is None:
             cache_dir = os.getcwd()
         # downloads
@@ -112,13 +66,26 @@ class IALBundle(object):
         if self.downloaded_to is not None:
             return os.path.join(self.downloaded_to, project)
 
-    def guess_packname(self,
-                       pack_type,
-                       compiler_label=None,
-                       compiler_flag=None,
-                       abspath=False,
-                       homepack=None,
-                       to_bin=False):
+    def tags_history(self):
+        """Get tags' history for each project's version."""
+        history = {}
+        cwd = os.getcwd()
+        for p in self.projects.keys():
+            repo = GitProxy(self.local_project_repo(p))
+            history[p] = []
+            for t in repo.tags_history(self.projects[p]['version']):
+                history[p].extend(t)
+        return history
+
+# gmkpack binding -------------------------------------------------------------
+
+    def gmkpack_guess_pack_name(self,
+                                pack_type,
+                                compiler_label=None,
+                                compiler_flag=None,
+                                abspath=False,
+                                homepack=None,
+                                to_bin=False):
         """
         Guess pack name from a number of arguments.
 
@@ -142,12 +109,12 @@ class IALBundle(object):
             path_elements.append('bin')
         return os.path.join(*path_elements)
 
-    def create_pack(self, pack_type,
-                    compiler_label=None,
-                    compiler_flag=None,
-                    homepack=None,
-                    rootpack=None,
-                    silent=False):
+    def gmkpack_create_pack(self, pack_type,
+                            compiler_label=None,
+                            compiler_flag=None,
+                            homepack=None,
+                            rootpack=None,
+                            silent=False):
         """
         Create pack according to IAL version in bundle.
 
@@ -175,27 +142,16 @@ class IALBundle(object):
             print("Creation of pack failed !")
             raise
 
-    def populate_pack(self,
-                      pack,
-                      cleanpack=False,
-                      populate_filter_file='__inconfig__',
-                      link_filter_file='__inconfig__'):
+    def gmkpack_populate_pack(self, pack, cleanpack=False):
         """
         Populate a pack with the contents of the bundle's projects.
 
         :param cleanpack: if True, call cleanpack before populating
-        :param populate_filter_file: filter file (list of files to be filtered)
-            for populate time (defaults from within ial_build package)
-        :param link_filter_file: filter file (list of files to be filtered)
-            for link time (defaults from within ial_build package)
         """
         assert isinstance(pack, Pack)
         assert self.downloaded_to is not None, "Bundle projects to be downloaded before populating a pack."
         try:
-            pack.bundle_populate(self,
-                                 cleanpack=cleanpack,
-                                 populate_filter_file=populate_filter_file,
-                                 link_filter_file=link_filter_file)
+            pack.bundle_populate(self, cleanpack=cleanpack)
         except Exception:
             print("Failed export of bundle to pack !")
             raise
@@ -203,15 +159,4 @@ class IALBundle(object):
             print("\nSucessful export of bundle: {} to pack: {}".format(self.bundle_file, pack.abspath))
         finally:
             print("-" * 50)
-
-    def tags_history(self):
-        from .repositories import GitProxy
-        history = {}
-        cwd = os.getcwd()
-        for p in self.projects.keys():
-            repo = GitProxy(self.local_project_repo(p))
-            history[p] = []
-            for t in repo.tags_history(self.projects[p]['version']):
-                history[p].extend(t)
-        return history
 
