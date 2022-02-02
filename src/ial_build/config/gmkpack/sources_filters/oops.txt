@@ -1,0 +1,8 @@
+.settings
+Documents
+Testing
+bamboo
+cmake
+l95
+qg
+tools

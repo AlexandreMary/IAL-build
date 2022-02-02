@@ -12,6 +12,7 @@ import subprocess
 import tarfile
 import io
 import shutil
+import glob
 from contextlib import contextmanager
 
 from bronx.stdtypes.date import now
@@ -61,6 +62,7 @@ class GmkpackTool(object):
 
     @staticmethod
     def clean_env():
+        """Clean gmkpack env variables that could be detrimental, and set needed ones."""
         vars_to_unset = ('GMK_USER_PACKNAME_STYLE', 'PACK_EXT', 'PACK_PREFIX')
         for k in vars_to_unset:
             if k in os.environ:
@@ -743,32 +745,21 @@ class Pack(object):
         with self._cd_local(subdir=subdir):
             copy_files_in_cwd(list_of_files, directory_abspath)
 
-    # DEPRECATED:migrate to bundle
-    def populate_from_IALview_as_main(self, view,
-                                      populate_filter_file='__inconfig__',
-                                      link_filter_file='__inconfig__'):
+    def populate_from_IALview_as_main(self, view):
         """
         Populate main pack with contents from a IALview.
-
-        :param populate_filter_file: file in which to read the files to be
-            filtered at populate time.
-            Special values:
-            '__inconfig__' will read according file in config of ial_build package;
-            '__inrepo__' will read according file in Git repository
-        :param link_filter_file: file in which to read the files to be
-            filtered at link time.
-            Special values:
-            '__inconfig__' will read according file in config of ial_build package;
-            '__inrepo__' will read according file in Git repository
         """
         from .repositories import IALview
         assert isinstance(view, IALview)
-        self._populate_from_repo_in_bulk(view.repository,
-                                         populate_filter_file=populate_filter_file,
-                                         link_filter_file=link_filter_file)
+        filter_file = self.a_posteriori_filter_file('IAL', view.tags_history)
+        msg = "Populating main pack with: '{}'".format(view.ref)
+        print('\n' + msg + '\n' + '=' * len(msg))
+        self._populate_from_repo_in_bulk(view.repository, filter_file=filter_file)
+        # symbols to be ignored
+        symbols_file = self._configfile_symbols_to_be_dummyfied(view.tags_history)
+        self.ignore_dummy_symbols_from_file(symbols_file)
         self.write_view_info(view)
 
-    # DEPRECATED:migrate to bundle
     def populate_from_IALview_as_incremental(self, view, start_ref=None):
         """
         Populate as incremental pack with contents from a IALview.
@@ -785,8 +776,14 @@ class Pack(object):
                     self.tag_of_latest_official_ancestor, view.latest_official_tagged_ancestor)
             #self._assert_IALview_compatibility(view)
             touched_files = view.touched_files_since_latest_official_tagged_ancestor
+            print("Populating with modifications between '{}' and '{}'".
+                format(view.latest_official_tagged_ancestor,
+                       view.ref))
         else:
             touched_files = view.touched_files_since(start_ref)
+            print("Populating with modifications between '{}' and '{}'".
+                format(start_ref,
+                       view.ref))
         if len(view.git_proxy.touched_since_last_commit) > 0:
             print("! Note:  non-committed files in the view are exported to the pack.")
         # files to be copied
@@ -827,7 +824,6 @@ class Pack(object):
             shutil.copytree(pkg_src, pkg_dst, symlinks=True)
         print("-" * len(msg))
 
-    # DEPRECATED:migrate to bundle
     def write_view_info(self, view):
         """Write view.info into self.origin_filepath."""
         openmode = 'a' if os.path.exists(self.origin_filepath) else 'w'
@@ -856,113 +852,90 @@ class Pack(object):
     def _populate_from_repo_in_bulk(self,
                                     repository,
                                     subdir=None,
-                                    populate_filter_file='__inconfig__',
-                                    link_filter_file='__inconfig__'):
+                                    filter_file=None):
         """
         Populate a main pack src/local/ with the contents of a repo.
 
         :param subdir: if given, populate in src/local/{subdir}/
-        :param populate_filter_file: file in which to read the files to be
-            filtered at populate time.
-            Special values:
-            '__inconfig__' will read according file in config of ial_build package;
-            '__inrepo__' will read according file in Git repo
-        :param link_filter_file: file in which to read the files to be
-            filtered at link time.
-            Special values:
-            '__inconfig__' will read according file in config of ial_build package;
-            '__inrepo__' will read according file in Git repo
+        :param filter_file: file in which to find list of files/dir to be filtered out
         """
-        # prepare populate filter
-        pop_filter_list = self._read_filter_list('populate',
-                                                 populate_filter_file,
-                                                 repository)
-        for i, f in enumerate(pop_filter_list):
-            if not os.path.isabs(f):
-                pop_filter_list[i] = os.path.join(repository, f)
-        # populate
-        print("\nSubprojects:")
+        if subdir is None:
+            dst = self._local
+        else:
+            dst = os.path.join(self._local, subdir)
+            if not os.path.exists(dst):
+                os.makedirs(dst)
+        print("\n  Subprojects:")
         for f in sorted(os.listdir(repository)):
+            if f == '.git':
+                continue
             f_src = os.path.join(repository, f)
-            if subdir is None:
-                f_dst = os.path.join(self._local, f)
-            else:
-                f_dst = os.path.join(self._local, subdir, f)
-            if f_src in pop_filter_list and os.path.isdir(f_src):
-                print("({} is filtered out)".format(f))
-            else:
-                if os.path.isdir(f_src):  # actual subproject
-                    print(f)
-                    subproject = DirectoryFiltering(f_src, pop_filter_list)
-                    subproject.copytree(f_dst, symlinks=True)  # TODO: rsync instead, to recompile only modified files
-                else:
-                    shutil.copy(f_src, f_dst)  # single file
-        # link filter
-        link_filter_list = self._read_filter_list('link',
-                                                  link_filter_file,
-                                                  repository)
-        self.set_ignored_files_at_linktime(link_filter_list)
+            if os.path.isdir(f_src):  # actual subproject
+                print('  {}'.format(f))
+            subprocess.check_call(['rsync', '-avq', f_src, dst])
+        # filter a posteriori
+        if filter_file is not None:
+            to_be_filtered = self.prepare_sources_filter(filter_file, subdir=subdir)
+            self.filter_sources_a_posteriori(to_be_filtered)
+        else:
+            print("\n  ! No filter file found for component: '{}'.".format(component))
+        print('-'*80)
 
     # Populate from bundle -----------------------------------------------------
 
     def bundle_populate_component(self,
                                   component,
                                   bundle,
-                                  populate_filter_file='__inconfig__',
-                                  link_filter_file='__inconfig__'):
+                                  filter_file=None):
         """
         Populate src/local in incr pack from bundle.
 
         :param bundle: the ial_build.bundle.IALBundle object.
-        :param populate_filter_file: file in which to read the files to be
+        :param filter_file: file in which to read the files to be
             filtered at populate time.
-            Special values:
-            '__inconfig__' will read according file in config of ial_build package;
-            '__inrepo__' will read according file in Git repo
-        :param link_filter_file: file in which to read the files to be
-            filtered at link time.
-            Special values:
-            '__inconfig__' will read according file in config of ial_build package;
-            '__inrepo__' will read according file in Git repo
         """
         config = bundle.projects[component]
         pkg_dst = self._bundle_component_destination(component, config)
         repository = bundle.local_project_repo(component)
         if pkg_dst.startswith('hub'):
             # packages auto-compiled, in hub
-            print("Hub Package: '{}' ({}) from repo: {} via cache: {}".format(component,
-                                                                              config['version'],
-                                                                              config['git'],
-                                                                              repository))
+            print("\n* '{}' ({}) from repo: {} via cache: {}".format(component,
+                                                                                config['version'],
+                                                                                config['git'],
+                                                                                repository))
             if self.is_incremental:
-                print("!-> Incremental hub packages is currently not an available feature: populated in bulk")
+                print("  ! Incremental hub packages is currently not an available feature -> populated in bulk")
+                # TODO: option in bundle to tell if to be populated in case of incr pack
             pkg_dst = os.path.join(self.abspath, pkg_dst, component)
+            if os.path.exists(pkg_dst):
+                shutil.rmtree(pkg_dst)
             shutil.copytree(repository, pkg_dst, symlinks=True)
         elif pkg_dst.startswith('src/local'):
             # components to be compiled with gmkpack, in src/local
-            print("Component: '{}' ({}) from repo: {} via cache: {}".format(component,
-                                                                            config['version'],
-                                                                            config['git'],
-                                                                            repository))
-            subdir = os.path.split(pkg_dst)
+            print("\n* Component: '{}' ({}) from repo: {} via cache: {}".format(component,
+                                                                                config['version'],
+                                                                                config['git'],
+                                                                                repository))
+            subdir = pkg_dst.split(os.path.sep)
             if len(subdir) > 2:
                 subdir = subdir[2]
+                print("  -> to subdirectory: src/local/{}".format(subdir))
             else:
                 subdir = None
             if not self.is_incremental or self.initial_version_of_component(component) is None:
                 # main pack, or not able to determine an increment: bulk
                 if self.is_incremental:
-                    print("! Could not find initial version of component '{}'".format(component),
-                          "in root pack: populate in bulk")
+                    print("  ! Could not find initial version of component '{}'".format(component),
+                          "in root pack --> populated in bulk")
                 self._populate_from_repo_in_bulk(repository,
                                                  subdir=subdir,
-                                                 populate_filter_file=populate_filter_file,
-                                                 link_filter_file=link_filter_file)
+                                                 filter_file=filter_file)
             else:
                 # incremental pack
                 self._populate_from_repo_as_incremental_component(repository,
                                                                   self.initial_version_of_component(component),
                                                                   subdir=subdir)
+                print("  ! Incremental source update: no filtering.")
 
     def initial_version_of_component(self, component):
         """
@@ -979,17 +952,16 @@ class Pack(object):
     def _populate_from_repo_as_incremental_component(self,
                                                      repository,
                                                      initial_version,
-                                                     populating_version='HEAD',
                                                      subdir=None):
         """
-        Populate the incremental pack with the diff between **initial_version** and **populating_version**
+        Populate the incremental pack with the diff since **initial_version**
         from **repository**.
 
         :param subdir: if given, populate in src/local/subdir/ (otherwise src/local/)
         """
         from .repositories import GitProxy
         repo = GitProxy(repository)
-        touched_files = repo.touched_between(initial_version, populating_version)
+        touched_files = repo.touched_files_since(initial_version)
         # files to be copied
         files_to_copy = []
         for k in ('A', 'M', 'T'):
@@ -1008,49 +980,41 @@ class Pack(object):
 
     def bundle_populate(self,
                         bundle,
-                        cleanpack=False,
-                        populate_filter_file='__inconfig__',
-                        link_filter_file='__inconfig__'):
+                        cleanpack=False):
         """
         Populate pack from bundle.
 
         :param bundle: the ial_build.bundle.IALBundle object.
         :param cleanpack: if True, call cleanpack before populating
-        :param populate_filter_file: file in which to read the files to be
-            filtered at populate time.
-            Special values:
-            '__inconfig__' will read according file in config of ial_build package;
-            '__inrepo__' will read according file in Git repo
-        :param link_filter_file: file in which to read the files to be
-            filtered at link time.
-            Special values:
-            '__inconfig__' will read according file in config of ial_build package;
-            '__inrepo__' will read according file in Git repo
         """
         if cleanpack:
             self.cleanpack()
+        # prepare
         hub_components = {component:config for component, config in bundle.projects.items()
                           if self._bundle_component_destination(component, config).startswith('hub')}
         gmkpack_components = {component:config for component, config in bundle.projects.items()
                               if self._bundle_component_destination(component, config).startswith('src/local')}
+        tags_history = bundle.tags_history()
         # start with hub:
         msg = "Populating components in pack's hub:"
-        print("\n" + msg + "\n" + "-" * len(msg))
+        print("\n" + msg + "\n" + "=" * len(msg))
         for component, config in hub_components.items():
             self.bundle_populate_component(component,
-                                           bundle,
-                                           populate_filter_file=populate_filter_file,
-                                           link_filter_file=link_filter_file)
+                                           bundle)
         # then src/local components:
         msg = "Populating components in pack's src/local:"
-        print("\n" + msg + "\n" + "-" * len(msg))
+        print("\n" + msg + "\n" + "=" * len(msg))
         for component, config in gmkpack_components.items():
+            filter_file = self.a_posteriori_filter_file(component, tags_history[component])
             self.bundle_populate_component(component,
                                            bundle,
-                                           populate_filter_file=populate_filter_file,
-                                           link_filter_file=link_filter_file)
+                                           filter_file=filter_file)
+        print('-' * 80)
+        if self.is_incremental:
+            # symbols to be ignored
+            symbols_file = self._configfile_symbols_to_be_dummyfied(tags_history.get('IAL'))
+            self.ignore_dummy_symbols_from_file(symbols_file)
         # log in pack
-        self._bundle_write_properties(bundle.projects)
         shutil.copy(bundle.bundle_file, os.path.join(self.abspath, 'bundle.yml'))
 
     # FIXME: clean !
@@ -1241,16 +1205,106 @@ class Pack(object):
             filter_list = []
         return filter_list
 
+    def filter_sources_a_posteriori(self, filter_list):
+        """Remove sources files to be filtered from src/local/ (ensuring they are in src/local)."""
+        for f in filter_list:
+            f = os.path.abspath(f)  # eliminate potential ../
+            if not f.startswith(self._local):  # file is out of pack/src/local: ignore
+                print("! File '{}' is out of '{}': not removed".format(f, self._local))
+                continue
+            if os.path.isdir(f):
+                print("Removed tree: " + f)
+                shutil.rmtree(f)
+            else:
+                print("Removed file: " + f)
+                os.remove(f)
+
+    def prepare_sources_filter(self, filter_file, subdir=None):
+        """
+        Prepare a list of source files to be filtered out,
+        list is read from file then expanded (wildcards, abs paths).
+        """
+        print("\nList of sources to be filtered (read from file '{}'):".format(filter_file))
+        with io.open(filter_file, 'r') as ff:
+            filter_list = [f.strip() for f in ff.readlines()
+                           if (not f.strip().startswith('#') and f.strip() != '')]  # ignore commented and blank lines
+        # make abs paths
+        for i, f in enumerate(filter_list):
+            if not os.path.isabs(f):
+                if subdir is None:
+                    filter_list[i] = os.path.join(self._local, f)
+                else:
+                    filter_list[i] = os.path.join(self._local, subdir, f)
+        # expand wildcards
+        expanded_filter_list = []
+        for f in filter_list:
+            expanded_filter_list.extend(glob.glob(f))
+        return expanded_filter_list
+
+    def a_posteriori_filter_file(self, project, versions=None):
+        """
+        Find filter file in config or user config, for project and optionally version.
+        If **version** is a list, the list is read in reverse order.
+        User customization in ~/.config/ial_build/gmkpack/sources_filters/{version}.txt
+        """
+        user_dirpath = os.path.join(os.environ['HOME'], '.config', 'ial_build', 'gmkpack', 'sources_filters')
+        base_dirpath = os.path.join(os.path.dirname(__file__), 'config', 'gmkpack', 'sources_filters')
+        files = ['{}.txt'.format(project)]
+        if versions is not None:
+            if isinstance(versions, str):
+                versions = [versions]
+            if isinstance(versions, list):
+                files += ['{}-{}.txt'.format(project, v) for v in versions]
+        for d in (user_dirpath, base_dirpath):
+            for f in files[::-1]:
+                ff = os.path.join(d, f)
+                if os.path.exists(ff):
+                    return ff
+        return os.devnull  # if no file has been found
+
+    def _configfile_symbols_to_be_dummyfied(self, versions=None):
+        """
+        Find config file of symbols to be added as dummys at link time.
+        If **version** is a list, the list is read in reverse order.
+        User customization in ~/.config/ial_build/gmkpack/dummy_symbols/{version}.txt
+        """
+        user_dirpath = os.path.join(os.environ['HOME'], '.config', 'ial_build', 'gmkpack', 'dummy_symbols')
+        base_dirpath = os.path.join(os.path.dirname(__file__), 'config', 'gmkpack', 'dummy_symbols')
+        files = []
+        if versions is not None:
+            if isinstance(versions, str):
+                versions = [versions]
+            if isinstance(versions, list):
+                files += ['{}.txt'.format(v) for v in versions]
+        for d in (user_dirpath, base_dirpath):
+            for f in files[::-1]:  # latest version first
+                ff = os.path.join(d, f)
+                if os.path.exists(ff):
+                    return ff
+        return os.devnull  # if no file has been found
+
+    def ignore_dummy_symbols_from_file(self, filename):
+        """Set symbols to be ignored in src/unsxref/verbose."""
+        print("\nList of symbols to be dummyfied (read from file '{}'):".format(filename))
+        with io.open(filename, 'r') as ff:
+            symbols_list = [f.strip() for f in ff.readlines()
+                            if (not f.strip().startswith('#') and f.strip() != '')]  # ignore commented and blank lines
+        self.set_ignored_files_at_linktime(symbols_list)
+        print('-' * 80)
+
+    # TODO: integrate above
     def set_ignored_files_at_linktime(self, list_of_ignored_symbols):
         """Set symbols to be ignored in src/unsxref/verbose."""
         if isinstance(list_of_ignored_symbols, six.string_types):
             with io.open(list_of_ignored_symbols, 'r') as f:
                 list_of_ignored_symbols = [l.strip() for l in f.readlines()]
         for s in list_of_ignored_symbols:
+            print(s)
             symbol_path = os.path.join(self.abspath, 'src', 'unsxref', 'verbose', s)
             with io.open(symbol_path, 'a'):
                 os.utime(symbol_path, None)
 
+    # TODO: to be removed
     def write_ignored_files_at_compiletime(self, list_of_files):
         """Write files to be ignored in a dedicated file."""
         if isinstance(list_of_files, six.string_types):  # already a file containing filenames: copy

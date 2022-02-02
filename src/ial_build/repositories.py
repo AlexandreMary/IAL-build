@@ -25,7 +25,6 @@ class GitProxy(object):
         self.repository = os.path.abspath(repository)
         assert os.path.exists(os.path.join(self.repository, '.git')), \
             "This is not a Git **repository** : {}".format(self.repository)
-        print('using ' + self._git_cmd(['git', 'version'])[0])
 
     @contextmanager
     def cd_repo(self):
@@ -214,7 +213,7 @@ class GitProxy(object):
 
     def ref_checkout(self, ref):
         """Checkout existing reference (commit, branch, tag)."""
-        print("Checkout: " + ref)
+        print("Checkout: '{}' ...".format(ref))
         git_cmd = ['git', 'checkout', ref]
         self._git_cmd(git_cmd)
 
@@ -233,9 +232,13 @@ class GitProxy(object):
         commit = self._git_cmd(git_cmd)[0]
         return commit
 
-    def tags_between(self, start_ref, end_ref):
+    def tags_between(self, start_ref=None, end_ref='HEAD'):
         """Get the list of tags between 2 references (commits, branches, tags)."""
-        git_cmd = ['git', 'log', '{}...{}'.format(start_ref, end_ref),
+        if start_ref is None and end_ref:
+            refs = end_ref
+        else:
+            refs = '{}...{}'.format(start_ref, end_ref)
+        git_cmd = ['git', 'log', refs,
                    '--decorate', '--simplify-by-decoration']
         _re = re.compile('commit .+ \((.+)\)$')
         cmd_out = self._git_cmd(git_cmd)
@@ -244,6 +247,9 @@ class GitProxy(object):
         list_of_tags = [[ref[4:].strip() for ref in line if ref.startswith('tag:')]
                         for line in list_of_tags]
         return list_of_tags[::-1]
+
+    def tags_history(self, ref='HEAD'):
+        return self.tags_between(None, ref)
 
     # Commit(s) ----------------------------------------------------------------
 
@@ -331,6 +337,17 @@ class GitProxy(object):
             if len(asdict[k]) == 0:
                 asdict.pop(k)
         return asdict
+
+    def touched_files_since(self, ref):
+        """Lists touched files since **ref** (commit or tag), including uncommited."""
+        uncommitted = self.touched_since_last_commit
+        touched = self.touched_between(ref, 'HEAD')
+        for k in uncommitted.keys():
+            if k in touched:
+                touched[k].update(uncommitted[k])
+            else:
+                touched[k] = uncommitted[k]
+        return touched
 
     def preview_merge(self, contrib_ref, target_ref, common_ancestor=None):
         """
@@ -567,6 +584,14 @@ class IALview(object):
     # History ------------------------------------------------------------------
 
     @property
+    def tags_history(self):
+        """Tags in chronological order in history of git_ref."""
+        history = []
+        for t in self.git_proxy.tags_history(self.ref):
+            history.extend(t)
+        return history
+
+    @property
     def official_tagged_ancestors(self):
         """All official tagged ancestors."""
         official_tags = []
@@ -606,14 +631,7 @@ class IALview(object):
     # Content ------------------------------------------------------------------
     def touched_files_since(self, ref):
         """Lists touched files since **ref** (commit or tag)."""
-        uncommitted = self.git_proxy.touched_since_last_commit
-        touched = self.git_proxy.touched_between(ref, 'HEAD')
-        for k in uncommitted.keys():
-            if k in touched:
-                touched[k].update(uncommitted[k])
-            else:
-                touched[k] = uncommitted[k]
-        return touched
+        return self.git_proxy.touched_files_since(ref)
 
     @property
     def touched_files_since_latest_tagged_ancestor(self):

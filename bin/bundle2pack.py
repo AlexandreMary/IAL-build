@@ -34,6 +34,13 @@ if __name__ == '__main__':
                         help='Type of pack (default: incr).',
                         default='incr',
                         choices=['incr', 'main'])
+    parser.add_argument('-u', '--no_update',
+                        action='store_false',
+                        help='Do not try to update local repos, so that non-commited modifications in repos are' +
+                        'included. BEWARE that the checkedout version in each repo may then not be consistent' +
+                        'with the version requested in the bundle.',
+                        dest='update',
+                        default=True)
     parser.add_argument('-e', '--preexisting_pack',
                         action='store_true',
                         help='Assume the pack already preexists (protection against unhappy overwrites).',
@@ -64,6 +71,7 @@ if __name__ == '__main__':
 
     pack = bundle2pack(args.bundle,
                        pack_type=args.pack_type,
+                       update=args.update,
                        preexisting_pack=args.preexisting_pack,
                        clean_if_preexisting=args.clean_if_preexisting,
                        compiler_label=args.compiler_label,

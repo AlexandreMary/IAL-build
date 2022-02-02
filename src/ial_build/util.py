@@ -12,6 +12,7 @@ import six
 import os
 import shutil
 import socket
+import subprocess
 
 from .config import GMKPACK_HUB_PACKAGES, hosts_re
 
@@ -33,6 +34,8 @@ def copy_files_in_cwd(list_of_files, originary_directory_abspath):
         if not os.path.exists(dirpath):
             os.makedirs(dirpath)
         shutil.copyfile(os.path.join(originary_directory_abspath, f), f,
+                        **symlinks)
+        shutil.copystat(os.path.join(originary_directory_abspath, f), f,
                         **symlinks)
 
 
@@ -76,3 +79,4 @@ class DirectoryFiltering(object):
         shutil.copytree(self.abspath, dst,
                         symlinks=symlinks,
                         ignore=self._filter_function)
+

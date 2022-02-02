@@ -223,6 +223,7 @@ def IALgitref2pack(IAL_git_ref,
     :param homepack: directory in which to build pack
     :param rootpack: diretory in which to look for root pack (incr packs only)
     """
+    view = IALview(IAL_repo_path, IAL_git_ref)
     # pack
     if not preexisting_pack:
         args = GmkpackTool.getargs(pack_type,
@@ -246,7 +247,6 @@ def IALgitref2pack(IAL_git_ref,
         if clean_if_preexisting:
             pack.cleanpack()
     # then populate
-    view = IALview(IAL_repo_path, IAL_git_ref)
     if pack_type == 'main':
         pack.populate_from_IALview_as_main(view)
     elif pack_type == 'incr':

@@ -16,6 +16,7 @@ from .config import DEFAULT_BUNDLE_CACHE_DIR
 
 def bundle2pack(bundle_file,
                 pack_type='incr',
+                update=True,
                 preexisting_pack=False,
                 clean_if_preexisting=False,
                 cache_dir=DEFAULT_BUNDLE_CACHE_DIR,
@@ -36,7 +37,8 @@ def bundle2pack(bundle_file,
     :param rootpack: diretory in which to look for root pack (incr packs only)
     """
     b = IALBundle(bundle_file)
-    b.download(cache_dir=cache_dir)
+    b.download(cache_dir=cache_dir,
+               update=update)
     if not preexisting_pack:
         pack = b.create_pack(pack_type,
                              compiler_label=compiler_label,
@@ -127,8 +129,8 @@ class IALBundle(object):
         :param homepack: home of pack
         :param to_bin: True if the path to binaries subdirectory is requested
         """
-        IAL_git_ref = self.projects['arpifs']['version']
-        IAL_repo_path = self.local_project_repo('arpifs')  # no need to check it has been downloaded, only useful in certain cases
+        IAL_git_ref = self.projects['IAL']['version']
+        IAL_repo_path = self.local_project_repo('IAL')  # no need to check it has been downloaded, only useful in certain cases
         packname = GmkpackTool.guess_pack_name(IAL_git_ref, compiler_label, compiler_flag,
                                                pack_type=pack_type,
                                                IAL_repo_path=IAL_repo_path)
@@ -157,9 +159,9 @@ class IALBundle(object):
         :param silent: to hide gmkpack's stdout
         """
         # prepare IAL arguments for gmkpack
-        IAL_git_ref = self.projects['arpifs']['version']
+        IAL_git_ref = self.projects['IAL']['version']
         assert self.downloaded_to is not None, "Bundle projects to be downloaded before creation of pack."
-        IAL_repo_path = self.local_project_repo('arpifs')
+        IAL_repo_path = self.local_project_repo('IAL')
         args = GmkpackTool.getargs(pack_type,
                                    IAL_git_ref,
                                    IAL_repo_path,
@@ -201,3 +203,15 @@ class IALBundle(object):
             print("\nSucessful export of bundle: {} to pack: {}".format(self.bundle_file, pack.abspath))
         finally:
             print("-" * 50)
+
+    def tags_history(self):
+        from .repositories import GitProxy
+        history = {}
+        cwd = os.getcwd()
+        for p in self.projects.keys():
+            repo = GitProxy(self.local_project_repo(p))
+            history[p] = []
+            for t in repo.tags_history(self.projects[p]['version']):
+                history[p].extend(t)
+        return history
+
