@@ -473,7 +473,8 @@ class IALview(object):
                 else:
                     need_for_checkout = True
         else:
-            assert new_branch, "ref:'{}' does not exist; cannot checkout unless **new_branch**.".format(ref)
+            assert new_branch, ("ref:'{}' does not exist in repository:'{}'; ".format(ref, self.repository) +
+                                "cannot checkout unless **new_branch**.")
             need_for_checkout = True
         # actual checkout if needed
         if need_for_checkout:
@@ -650,7 +651,8 @@ class IALview(object):
         :param outdir: output directory for the doc file
         :param start_ref: starting reference to collect branch deltas
         """
-        template_file = os.path.join(os.path.dirname(__file__), 'config', 'doc_template.tex')
+        from ial_build import package_rootdir
+        template_file = os.path.join(package_rootdir, 'templates', 'contribution_documentation.tex')
         with io.open(template_file, 'r') as t:
             template = [l.strip() for l in t.readlines()]
         if start_ref is None:

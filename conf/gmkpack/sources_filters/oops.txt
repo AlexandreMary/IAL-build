@@ -1,0 +1,13 @@
+.settings
+Documents
+Testing
+bamboo
+cmake
+l95
+qg
+tools
+oops.sublime-project
+src/external
+src/util/random_interface.f
+src/util/test/config.F90
+src/util/test/duration.F90

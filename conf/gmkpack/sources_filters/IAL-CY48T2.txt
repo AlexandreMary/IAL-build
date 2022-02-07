@@ -27,12 +27,8 @@ odb/perl
 odb/scripts
 surf/offline
 validation
-VERSION
 
-# OOPS specific filtering
-oops_src/src/util/random_interface.f
-oops_src/src/util/test/config.F90
-oops_src/src/util/test/duration.F90
+# OOPSIFS specific filtering
 oopsifs/mains/TestErrorCovariance.cc
 oopsifs/mains/TestGeometry.cc
 oopsifs/mains/TestIncrement.cc
