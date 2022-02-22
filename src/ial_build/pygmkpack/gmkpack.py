@@ -349,7 +349,7 @@ class GmkpackTool(object):
                                                  compiler_flag)
         pack_name = cls.args2packname(args, pack_type)
         if abspath:
-            path = os.path.join(self.get_homepack(homepack), pack_name)
+            path = os.path.join(cls.get_homepack(homepack), pack_name)
             if to_bin:
                 path = os.path.join(path, 'bin')
             return path
