@@ -63,6 +63,7 @@ def IALgitref2pack(IAL_git_ref,
     # then populate
     if pack_type == 'main':
         pack.populate_from_IALview_as_main(view)
+        pack.populate_hub(view.latest_main_release_ancestor)
     elif pack_type == 'incr':
         pack.populate_from_IALview_as_incremental(view)
     print("Pack successfully populated: " + pack.abspath)

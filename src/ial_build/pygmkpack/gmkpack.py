@@ -200,8 +200,8 @@ class GmkpackTool(object):
             gmk_version = '00'
             gmk_prefix = '_upon'
         args = {'-r':gmk_release,
-                '-b':gmk_branch,
-                '-n':gmk_version,
+                '-b':gmk_branch if gmk_branch is not None else 'main',
+                '-n':gmk_version if gmk_version is not None else '00',
                 '-g':gmk_prefix}
         return args
 
