@@ -1,30 +1,29 @@
 \newpage
-\section{\texttt{__branch_protected_underscores__}}
+\section{__repro__ \texttt{__branch_protected_underscores__} --- __oneline_doc__}
 \label{branch:__branch__}
 Starts from: \texttt{__start_ref__}
 
 \subsubsection*{Author(s):}
-
+__authors__
 
 \subsubsection*{Documentation:}
-
+__fulldoc__
 
 \subsubsection*{Impact:}
-\begin{tabular}{|l|p{12cm}|}
- \hline
- Bit-repro: & YES / NO\\ \hline
- Configurations: & \\ \hline
- Scope/Extent: & \\
- \hline
-\end{tabular}
+\noindent Bit-repro: __repro__\\
+__numerical_impact__
 
 \subsubsection*{Configuration adaptations:}
 % e.g. new namelist block, new param file, ...
-\begin{itemize}
- \item None 
-\end{itemize}
+__config_adaptations__
+
+\subsubsection*{Commits:}
+\begin{lstlisting}
+__commits__
+\end{lstlisting}
 
 \subsubsection*{Source files:}
+(as returned by \`\texttt{git diff --name-status __start_ref__}\`)\\
 \begin{lstlisting}
 __as returned by: git diff --name-status__
 \end{lstlisting}

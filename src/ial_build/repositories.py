@@ -21,6 +21,8 @@ class GitError(Exception):
 
 class GitProxy(object):
 
+    re_author_in_commit = re.compile('Author: (?P<name>.+) <(?P<email>.+@\w+(\.\w+))>$')
+
     def __init__(self, repository='.'):
         self.repository = os.path.abspath(repository)
         assert os.path.exists(os.path.join(self.repository, '.git')), \
@@ -164,6 +166,22 @@ class GitProxy(object):
             print(out)
         print("    ...ok")
 
+    def oldest_common_ancestor(self, refA, refB='HEAD'):
+        """
+        Get the oldest "diverging" common ancestor to refA and refB.
+
+        From https://stackoverflow.com/questions/1527234/finding-a-branch-point-with-git
+
+        diff -u <(git rev-list --first-parent topic) \
+                     <(git rev-list --first-parent master) | \
+                          sed -ne 's/^ //p' | head -1
+        """
+        from ial_build import package_rootdir
+        return subprocess.check_output([os.path.join(package_rootdir, 'bin', 'git-oldest_common_ancestor'),
+                                        refA,
+                                        refB],
+                                       cwd=self.repository).decode('utf-8').strip()
+
     # Ref(s) -------------------------------------------------------------------
 
     def _refs_get(self):
@@ -280,15 +298,37 @@ class GitProxy(object):
         git_cmd = ['git', 'rev-parse', 'HEAD']
         return self._git_cmd(git_cmd)[0]
 
+    @property
+    def latest_commit_author(self):
+        """Author/email of latest commit."""
+        commit = self.log(['-1'])
+        for l in commit:
+            m = self.re_author_in_commit.match(l)
+            if m:
+                return m.groupdict()
+
+    def parents(self, ref):
+        """Get parent commit(s) of given ref."""
+        parents = self._git_cmd(['git', 'rev-list', '--parents', '-n', '1', ref])[0].split()[1:]
+        assert len(parents) in (1, 2), "Commit should have 1 or 2 parents only."
+        return parents
+
     # Content ------------------------------------------------------------------
 
-    def log(self, n=1, log_args=[]):
-        """Call `git log -n`"""
-        git_cmd = ['git', 'log', '-{}'.format(n)] + log_args
-        print('-' * 50)
-        for out in self._git_cmd(git_cmd):
-            print(out)
-        print('-' * 50)
+    def log(self, log_args=[], out=None):
+        """
+        Call `git log`.
+
+        :param out: can be sys.stdout or an open file handle.
+        """
+        git_cmd = ['git', 'log'] + log_args
+        log = self._git_cmd(git_cmd)
+        if out is not None:
+            out.write('-' * 50 + '\n')
+            for l in log:
+                out.write(l + '\n')
+            out.write('-' * 50 + '\n')
+        return log
 
     def touched_between(self, start_ref, end_ref):
         """
@@ -534,7 +574,7 @@ class IALview(object):
 
     @property
     def is_current_ref_IAL_conventional(self):
-        return self.is_ref_IAL_conventional(self_ref)
+        return self.is_ref_IAL_conventional(self.ref)
 
     @classmethod
     def is_ref_IAL_conventional(self, git_ref):
@@ -644,27 +684,95 @@ class IALview(object):
         """Lists touched files since *self.latest_official_tagged_ancestor*."""
         return self.touched_files_since(self.latest_official_tagged_ancestor)
 
-    def prep_doc(self, outdir, start_ref=None):
+    def prep_doc(self,
+                 metadata,
+                 outdir=None,
+                 from_start_ref=None,
+                 from_oldest_common_ancestor_with=None):
         """
         Pre-fill branch doc template.
 
         :param outdir: output directory for the doc file
-        :param start_ref: starting reference to collect branch deltas
+        :param from_start_ref: starting reference to collect branch deltas. Mutually exclusive with the next arg.
+        :param from_oldest_common_ancestor_with: consider branch from the oldest common ancestor with the given branch.
+            Typically, integration branch. Mutually exclusive with the former arg.
+
+        **metadata** is expected to be a dict(
+            numerical_impact=... : None, False or '' if bit-repro; otherwise a str describing scope and magnitude
+                of numerical impact [mandatory]
+            authors=... : a str naming authors of contribution
+            oneline_doc=... : a str describing the purpose of the branch in one line, for the summary table [mandatory]
+            fulldoc=... : a str of list of str, detailed documentation of the branch
+            config_adaptations=... : a str of list of str, description of the required config (namelist, param file...)
+                adaptations
         """
         from ial_build import package_rootdir
         template_file = os.path.join(package_rootdir, 'templates', 'contribution_documentation.tex')
         with io.open(template_file, 'r') as t:
             template = [l.strip() for l in t.readlines()]
-        if start_ref is None:
-            start_ref = self.latest_official_tagged_ancestor
-        print("Start ref:", start_ref)
+        # Ref
+        if from_start_ref == from_oldest_common_ancestor_with == None:
+            raise ValueError("One of ('from_oldest_common_ancestor_with', 'from_start_ref') must be provided.")
+        elif None not in (from_oldest_common_ancestor_with, from_start_ref):
+            raise ValueError("Only one of ('from_oldest_common_ancestor_with', 'from_start_ref') can be provided.")
+        elif from_start_ref is None:
+            # find oldest common ancestor with integration branch
+            if self.git_proxy.ref_is_tag(self.ref):
+                ref = self.git_proxy.tag_points_to(self.ref)  # get actual commit
+            elif self.git_proxy.ref_is_branch(self.ref):
+                ref = self.git_proxy.latest_commit  # get HEAD commit of branch
+            else:  # actual commit
+                ref = self.ref
+            start_ref = self.git_proxy.oldest_common_ancestor(from_oldest_common_ancestor_with, ref)
+            commit_len = min(len(ref), len(start_ref))
+            if ref[:commit_len] == start_ref[:commit_len]:
+                # commit is straightforward in branch (not merged), then:
+                if self.git_proxy.ref_is_branch(self.ref):
+                    # there is no way of guessing the start_ref
+                    raise ValueError("No way of guessing the start reference of a firstly-integrated branch; " +
+                                     "please provide explicit start ref.")
+                else:  # individual commit (or tag)
+                    # start_ref is direct parent
+                    parents = self.git_proxy.parents(self.ref)
+                    if len(parents) == 1:
+                        start_ref = parents[0]
+                    elif len(parents) == 2:
+                        raise ValueError("This ref ({}) is a merge commit; ".format(self.ref) +
+                                         "documenting can be requested for branches or individual commits only.")
+            start_ref = start_ref[:10]
+        elif from_oldest_common_ancestor_with is None:
+            # consider branch explicitly from provided start_ref
+            start_ref = from_start_ref
+        if self.git_proxy.ref_is_tag(start_ref):
+            start_ref_to_print = '{} ({})'.format(start_ref, self.git_proxy.tag_points_to(start_ref))
+        else:
+            start_ref_to_print = start_ref
+        print("Start ref:", start_ref_to_print)
         # Set branch
         for i, line in enumerate(template):
-            line = line.replace('__branch_protected_underscores__',
-                                self.branch_name.replace('_', '\_'))
-            line = line.replace('__branch__', self.branch_name)
-            line = line.replace('__start_ref__', start_ref.replace('_', '\_'))
             template[i] = line
+        # Repro/impact
+        repro_tex = {True:'$\checkmark$', False:'$\\neq$'}
+        if metadata['numerical_impact'] in ('', None, False):
+            numerical_impact = ''
+        else:
+            numerical_impact = '\\noindent Impact:\\\\ \n' + metadata['numerical_impact']
+        repro = numerical_impact == ''
+        # Authors
+        authors = metadata.get('authors', '{name} <{email}>'.format(**self.git_proxy.latest_commit_author))
+        # Replace
+        def replace_in_line(i, key, replacement):
+            if key in template[i]:
+                template[i] = template[i].replace(key, replacement)
+
+        for i, line in enumerate(template):
+            replace_in_line(i, '__branch_protected_underscores__', self.ref.replace('_', '\_'))
+            replace_in_line(i, '__branch__', self.ref)
+            replace_in_line(i, '__start_ref__', start_ref_to_print.replace('_', '\_'))
+            replace_in_line(i, '__repro__', repro_tex[repro])
+            replace_in_line(i, '__numerical_impact__', numerical_impact)
+            replace_in_line(i, '__oneline_doc__', metadata['oneline_doc'])
+            replace_in_line(i, '__authors__', authors)
         # Set contents
         touched = self.touched_files_since(start_ref)
         contents = []
@@ -675,7 +783,28 @@ class IALview(object):
         del template[index0]
         for f in sorted(contents, reverse=True):
             template.insert(index0, f)
-        outfile = os.path.join(outdir, self.branch_name + '.tex')
+        # Documentation
+        index0 = template.index('__fulldoc__')
+        del template[index0]
+        for f in metadata.get('fulldoc', ['---'])[::-1]:
+            template.insert(index0, f)
+        # Config adaptations
+        index0 = template.index('__config_adaptations__')
+        del template[index0]
+        for f in metadata.get('config_adaptations', ['---'])[::-1]:
+            template.insert(index0, f)
+        # Commits
+        commits = self.git_proxy.log(['{}...{}'.format(start_ref, 'HEAD'), '--oneline'])
+        index0 = template.index('__commits__')
+        del template[index0]
+        for f in commits[::-1]:
+            template.insert(index0, f)
+        # Output
+        if outdir is None:
+            outdir = ial_build.config.IAL_DOC_OUTPUT_DIR
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+        outfile = os.path.join(outdir, self.ref + '.tex')
         with io.open(outfile, 'w') as out:
             out.writelines([l + '\n' for l in template])
         print("Output written in: {}".format(outfile))

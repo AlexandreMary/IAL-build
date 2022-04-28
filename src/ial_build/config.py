@@ -20,6 +20,7 @@ IAL_OFFICIAL_PACKS_re = re.compile('(?P<prefix>((cy)|(CY))?)(?P<release>\d{2}([T
 IAL_BRANCHES_re = re.compile('_'.join(['(?P<user>\w+)',
                                        'CY(?P<release>\d{2}([TRH]\d)?)',
                                        '(?P<radical>.+)$']))
+IAL_DOC_OUTPUT_DIR = os.path.join(os.environ['HOME'], 'tmp','prep_doc')
 
 DEFAULT_BUNDLE_CACHE_DIR = os.path.join(os.environ['HOME'], 'bundles')
 
