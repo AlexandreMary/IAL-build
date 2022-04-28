@@ -759,7 +759,7 @@ class IALview(object):
             numerical_impact = '\\noindent Impact:\\\\ \n' + metadata['numerical_impact']
         repro = numerical_impact == ''
         # Authors
-        authors = metadata.get('authors', '{name} <{email}>'.format(**self.git_proxy.latest_commit_author))
+        authors = metadata.get('authors', self.git_proxy.latest_commit_author['name'])
         # Replace
         def replace_in_line(i, key, replacement):
             if key in template[i]:
