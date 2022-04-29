@@ -60,21 +60,27 @@ class GitProxy(object):
 
     def push(self, remote=None):
         """Push current branch to **remote**."""
-        git_cmd = ['git', 'push', self.current_branch]
+        git_cmd = ['git', 'push']
         if remote is not None:
-            git_cmd.extend(['-u', remote])
+            git_cmd.append(remote)
         self._git_cmd(git_cmd)
 
+    re_detached_HEAD = re.compile('^\* \(HEAD detached at (?P<ref>.+)\)$')
+
     @property
-    def current_branch(self):
-        """Currently checkedout branch."""
+    def currently_checkedout(self):
+        """Return ref of what is currently checkedout."""
         git_cmd = ['git', 'branch']
         list_of_branches = self._git_cmd(git_cmd)
         for branch in list_of_branches:
             if branch.startswith('*'):
-                branch = branch.split()[1]
+                m = self.re_detached_HEAD.match(branch)
+                if m:
+                    ref = m.group('ref')
+                else:
+                    ref = branch.split()[1]
                 break
-        return branch
+        return ref
 
     # Branch(es) ---------------------------------------------------------------
 
@@ -137,7 +143,7 @@ class GitProxy(object):
     def current_branch_is_tracking(self, only_remote=None):
         """Return remote-tracking branch of the current branch, if existing."""
         git_cmd = ['git', 'for-each-ref', "--format=%(upstream:short)",
-                   'refs/heads/' + self.current_branch]
+                   'refs/heads/' + self.currently_checkedout]
         remote_branch = self._git_cmd(git_cmd)
         if len(remote_branch) > 0:
             remote_branch = remote_branch[0]
@@ -490,11 +496,7 @@ class IALview(object):
             self.git_proxy.fetch(remote=remote,
                                  ref=ref if remote is not None else None)
         # initial state (to get back at the end)
-        current_branch = self.git_proxy.current_branch
-        if current_branch == '(no branch)':  # detached HEAD state
-            self.initial_checkedout = self.git_proxy.latest_commit
-        else:
-            self.initial_checkedout = self.git_proxy.current_branch
+        self.initial_checkedout = self.git_proxy.currently_checkedout
         # determine if need to checkout
         if self.git_proxy.ref_exists(ref):
             assert not new_branch, "ref: {} already exists, while **new_branch** is True.".format(ref)
@@ -502,6 +504,7 @@ class IALview(object):
                 need_for_checkout = (self.initial_checkedout != ref)
             elif self.git_proxy.ref_is_tag(ref):
                 if self.git_proxy.tag_points_to(ref) == self.git_proxy.latest_commit and self.git_proxy.is_clean:
+                    # ref is a tag, HEAD points on same commit and working copy is clean
                     need_for_checkout = False
                 else:
                     need_for_checkout = True
@@ -529,7 +532,8 @@ class IALview(object):
                     self.GCOdb_register(start_commit)
             else:
                 if self.git_proxy.ref_is_branch(ref) and ref in self.git_proxy.detached_branches():
-                    raise NotImplementedError("Checking out detached branch")
+                    #raise NotImplementedError("Checking out detached branch")
+                    self.git_proxy.ref_checkout(ref)
                 if self.git_proxy.ref_is_branch(ref) and ref not in self.git_proxy.local_branches:
                     # remote branch: need to checkout as new local branch
                     tracked = self.git_proxy.branch_as_detached(ref, remote)
@@ -537,12 +541,10 @@ class IALview(object):
                     self.git_proxy.checkout_new_branch(ref, tracked)
                 else:
                     self.git_proxy.ref_checkout(ref)
-        # set branch name
-        self.branch_name = self.git_proxy.current_branch
 
     def __del__(self):
         try:
-            if self.initial_checkedout not in (self.git_proxy.latest_commit, self.git_proxy.current_branch):
+            if self.initial_checkedout not in (self.git_proxy.latest_commit, self.git_proxy.currently_checkedout):
                 # need to checkout back
                 if self.git_proxy.is_clean:
                     self.git_proxy.ref_checkout(self.initial_checkedout)
@@ -555,8 +557,8 @@ class IALview(object):
     def info(self, out=sys.stdout):
         """Write info about the view."""
         info = ["-" * 50,
-                "*** View of '{}' ***".format(self.ref),
-                "Branch: " + self.branch_name,
+                "*** View of ref: '{}' ***".format(self.ref),
+                self.git_proxy.log(['-1', '--decorate'])[0],
                 "Latest official tagged ancestor: " + self.latest_official_tagged_ancestor,
                 ]
         touched_since_last_commit = self.git_proxy.touched_since_last_commit
@@ -610,8 +612,9 @@ class IALview(object):
                                         "which syntax must look like one of",
                                         "mary_CY47T1_dev (branch), CY47T1_r1.04 (tag), CY47T1 (tag)"]))
 
-    def GCOdb_register(self, start_commit=None):
+    def GCOdb_register(self, start_commit=None):  # TODO: delete
         """
+        DEPRECATED !
         Register branch in GCO database (proxy to 'git_branch -q -a').
         """
         cmd = ['git_branch', '-q', '-a']
@@ -752,11 +755,12 @@ class IALview(object):
         for i, line in enumerate(template):
             template[i] = line
         # Repro/impact
-        repro_tex = {True:'$\checkmark$', False:'$\\neq$'}
+        repro_symbol = {True:'$\checkmark$', False:'$\\neq$'}
+        repro_word = {True:'YES', False:'NO'}
         if metadata['numerical_impact'] in ('', None, False):
             numerical_impact = ''
         else:
-            numerical_impact = '\\noindent Impact:\\\\ \n' + metadata['numerical_impact']
+            numerical_impact = '\\noindent ' + metadata['numerical_impact']
         repro = numerical_impact == ''
         # Authors
         authors = metadata.get('authors', self.git_proxy.latest_commit_author['name'])
@@ -769,7 +773,8 @@ class IALview(object):
             replace_in_line(i, '__branch_protected_underscores__', self.ref.replace('_', '\_'))
             replace_in_line(i, '__branch__', self.ref)
             replace_in_line(i, '__start_ref__', start_ref_to_print.replace('_', '\_'))
-            replace_in_line(i, '__repro__', repro_tex[repro])
+            replace_in_line(i, '__repro_symbol__', repro_symbol[repro])
+            replace_in_line(i, '__repro_word__', repro_word[repro])
             replace_in_line(i, '__numerical_impact__', numerical_impact)
             replace_in_line(i, '__oneline_doc__', metadata['oneline_doc'])
             replace_in_line(i, '__authors__', authors)

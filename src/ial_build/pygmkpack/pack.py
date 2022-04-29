@@ -861,7 +861,7 @@ class Pack(object):
         for f in files_to_delete:
             branch.git_proxy.delete_file(f)
         print("=> Pack: '{}' saved as branch: '{}' in repository: {}".format(
-            self.packname, branch.branch_name, repository))
+            self.packname, branch.ref, repository))
         # commit  TOBECHECKED:
         if commit_message is not None:
             branch.git_proxy.stage(touched_files)
