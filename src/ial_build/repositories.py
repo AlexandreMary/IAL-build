@@ -757,7 +757,7 @@ class IALview(object):
         # Repro/impact
         repro_symbol = {True:'$\checkmark$', False:'$\\neq$'}
         repro_word = {True:'YES', False:'NO'}
-        if metadata['numerical_impact'] in ('', None, False):
+        if metadata['numerical_impact'] in ('', 'None', 'False', None, False):
             numerical_impact = ''
         else:
             numerical_impact = '\\noindent ' + metadata['numerical_impact']
