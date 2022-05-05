@@ -21,7 +21,7 @@ class GitError(Exception):
 
 class GitProxy(object):
 
-    re_author_in_commit = re.compile('Author: (?P<name>.+) <(?P<email>.+@\w+(\.\w+))>$')
+    re_author_in_commit = re.compile('Author: (?P<name>.+) <(?P<email>.+@.+)>$')
 
     def __init__(self, repository='.'):
         self.repository = os.path.abspath(repository)
@@ -352,8 +352,7 @@ class GitProxy(object):
             if line[0] in ('A', 'M', 'T', 'D'):
                 asdict[line[0]].add(line[2:].strip())
             elif line[0] in ('C', 'R'):
-                #asdict[line[0]].add(tuple(line.split()[1:3]))
-                asdict[line[0]].add(tuple(line.split()[1::2]))  # file1 -> file2
+                asdict[line[0]].add(tuple(line.split()[1:3]))  # syntax: R file1 file2
             else:
                 asdict[line[0]].add(line)  # FIXME: don't know how to interpret this
         for k in list(asdict.keys()):
@@ -377,7 +376,7 @@ class GitProxy(object):
             if line[0] in ('A', 'M', 'T', 'D'):
                 asdict[line[0]].add(line[2:].strip())
             elif line[0] in ('C', 'R'):
-                asdict[line[0]].add(tuple(line.split()[1::2]))  # file1 -> file2
+                asdict[line[0]].add(tuple(line.split()[1::2]))  # syntax: R99 file1 -> file2
             else:
                 asdict[line[0]].add(line)  # FIXME: don't know how to interpret this
         for k in list(asdict.keys()):
@@ -534,7 +533,7 @@ class IALview(object):
                 if self.git_proxy.ref_is_branch(ref) and ref in self.git_proxy.detached_branches():
                     #raise NotImplementedError("Checking out detached branch")
                     self.git_proxy.ref_checkout(ref)
-                if self.git_proxy.ref_is_branch(ref) and ref not in self.git_proxy.local_branches:
+                elif self.git_proxy.ref_is_branch(ref) and ref not in self.git_proxy.local_branches:
                     # remote branch: need to checkout as new local branch
                     tracked = self.git_proxy.branch_as_detached(ref, remote)
                     print("Branch '{}' to be tracked as new branch from '{}'".format(ref, tracked))
@@ -770,8 +769,8 @@ class IALview(object):
                 template[i] = template[i].replace(key, replacement)
 
         for i, line in enumerate(template):
-            replace_in_line(i, '__branch_protected_underscores__', self.ref.replace('_', '\_'))
-            replace_in_line(i, '__branch__', self.ref)
+            replace_in_line(i, '__branch_protected_underscores__', self.ref.replace('_', '\_').replace('%', '\%'))  # FIXME:
+            replace_in_line(i, '__branch__', self.ref.replace('%', '_'))  # FIXME:
             replace_in_line(i, '__start_ref__', start_ref_to_print.replace('_', '\_'))
             replace_in_line(i, '__repro_symbol__', repro_symbol[repro])
             replace_in_line(i, '__repro_word__', repro_word[repro])
@@ -809,7 +808,9 @@ class IALview(object):
             outdir = ial_build.config.IAL_DOC_OUTPUT_DIR
         if not os.path.exists(outdir):
             os.makedirs(outdir)
-        outfile = os.path.join(outdir, self.ref + '.tex')
+        outfile = self.ref.replace('/', ':').replace('%', '_') + '.tex'
+        print("Output filename: {}".format(outfile))
+        outfile = os.path.join(outdir, outfile)
         with io.open(outfile, 'w') as out:
             out.writelines([l + '\n' for l in template])
         print("Output written in: {}".format(outfile))
