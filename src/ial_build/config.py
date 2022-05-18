@@ -37,14 +37,17 @@ _ecSDK_dir = {'belenos':'/home/gmap/mrpe/mary/public/ecSDK',
               }
 GMKPACK_HUB_PACKAGES = {'eckit':{'CY48':'1.4.4',
                                  'CY48T1':'mf_1.4.4_for48T2',
+                                 'CY48T2':'mf_1.4.4_for48T2',
                                  'CY46T1':'1.4.4',
                                  'project':'ecSDK'},
                         'fckit':{'CY48':'0.6.4',
                                  'CY48T1':'0.6.4',
+                                 'CY48T2':'0.6.4',
                                  'CY46T1':'0.6.4',
                                  'project':'ecSDK'},
                         'ecbuild':{'CY48':'3.1.0',
                                    'CY48T1':'3.1.0',
+                                   'CY48T2':'3.1.0',
                                    'CY46T1':'3.1.0',
                                    'project':'ecSDK'}
                         }
