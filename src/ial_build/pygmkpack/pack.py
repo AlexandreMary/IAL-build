@@ -348,6 +348,8 @@ class Pack(object):
             print("Package: '{}/{}' (v{}) from {}".format(project, package, version, rootdir))
             pkg_src = os.path.join(rootdir, package, version)
             pkg_dst = os.path.join(self._hub_local_src, project, package)
+            if os.path.exists(pkg_dst):
+                shutil.rmtree(pkg_dst)
             shutil.copytree(pkg_src, pkg_dst, symlinks=True)
         print("-" * len(msg))
 
