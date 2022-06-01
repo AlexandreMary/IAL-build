@@ -11,6 +11,7 @@ import re
 import sys
 import io
 from contextlib import contextmanager
+import getpass
 
 from .config import IAL_OFFICIAL_TAGS_re, IAL_BRANCHES_re
 
@@ -196,10 +197,16 @@ class GitProxy(object):
         refs = []
         for h, r in list_of_refs:
             if r.startswith('refs/remotes'):
-                refs.append({'ref':r.split('/')[3],
-                             'hash':h,
-                             'rtype':'branch',
-                             'remote':r.split('/')[2]})
+                if r.endswith('/HEAD'):
+                    refs.append({'ref':r.split('/')[3],
+                                 'hash':h,
+                                 'rtype':'HEAD',
+                                 'remote':r.split('/')[2]})
+                else:
+                    refs.append({'ref':r.split('/')[3],
+                                 'hash':h,
+                                 'rtype':'branch',
+                                 'remote':r.split('/')[2]})
             elif r.startswith('refs/heads'):
                 refs.append({'ref':r.split('/')[2],
                              'hash':h,
@@ -572,6 +579,10 @@ class IALview(object):
         info.append("-" * 50)
         for line in info:
             out.write(line + '\n')
+
+    def new_branch_classical_nomenclature(self, branch_radical):
+        """Return a GCO-classically formatted branch name, based on current HEAD."""
+        return '{}_{}_{}'.format(getpass.getuser(), self.latest_main_release_ancestor, branch_radical)
 
     @property
     def is_current_ref_IAL_conventional(self):
