@@ -7,10 +7,11 @@
 from __future__ import print_function, absolute_import, unicode_literals, division
 
 import os
+import io
 
 """
 IAL (IFS-ARPEGE & LAM:ALADIN-AROME-ALARO-HARMONIE) source code management.
 """
 
-__version__ = '1.1.3'
 package_rootdir = os.path.dirname(os.path.dirname(os.path.realpath(__path__[0])))  # realpath to resolve symlinks
+__version__ = io.open(os.path.join(package_rootdir, 'VERSION'), 'r').read().strip()
