@@ -14,7 +14,6 @@ from .repositories import IALview
 from .pygmkpack import (Pack, PackError, GmkpackTool,
                         USUAL_BINARIES)
 from .bundle import IALBundle
-from .config import DEFAULT_BUNDLE_CACHE_DIR
 
 
 def IALgitref2pack(IAL_git_ref,
@@ -75,7 +74,7 @@ def bundle2pack(bundle_file,
                 update=True,
                 preexisting_pack=False,
                 clean_if_preexisting=False,
-                cache_dir=DEFAULT_BUNDLE_CACHE_DIR,
+                cache_dir=None,
                 compiler_label=None,
                 compiler_flag=None,
                 homepack=None,

@@ -26,10 +26,11 @@ class IALBundle(object):
         for project in self.ecbundle.get('projects'):
             for name, conf in project.items():
                 self.projects[name] = dict(conf)
-        self.downloaded_to = None
+        self.downloaded = None  # none = unknown
+        self.src_dir = DEFAULT_BUNDLE_CACHE_DIR
 
     def download(self,
-                 cache_dir=DEFAULT_BUNDLE_CACHE_DIR,
+                 cache_dir=None,
                  update=True,
                  threads=1,
                  no_colour=True,
@@ -41,11 +42,13 @@ class IALBundle(object):
         :param update: if repositories are to be updated/checkedout
         :param threads: number of threads to do parallel downloads
         :param no_colour: Disable color output
-
-        Returns (src_dir, parsed_bundle)
         """
+        import logging
+        from ecbundle.logging import logger
+        logger.setLevel(logging.DEBUG)
         from ecbundle import BundleDownloader
         if cache_dir is None:
+            #cache_dir = self.src_dir  # FIXME: this does not work in Davai context for some reason
             cache_dir = os.getcwd()
         # downloads
         b = BundleDownloader(bundle=self.bundle_file,
@@ -59,12 +62,13 @@ class IALBundle(object):
                              forced_update=update)
         if b.download() != 0:
             raise RuntimeError("Downloading repositories failed.")
-        self.downloaded_to = b.src_dir()
+        self.downloaded = True
+        self.src_dir = b.src_dir()
 
     def local_project_repo(self, project):
         """Path to locally downloaded repository of project."""
-        if self.downloaded_to is not None:
-            return os.path.join(self.downloaded_to, project)
+        assert self.src_dir is not None, "Bundle has to be downloaded or 'src_dir' attribute defined." 
+        return os.path.join(self.src_dir, project)
 
     def tags_history(self):
         """Get tags' history for each project's version."""
@@ -127,7 +131,7 @@ class IALBundle(object):
         """
         # prepare IAL arguments for gmkpack
         IAL_git_ref = self.projects['IAL']['version']
-        assert self.downloaded_to is not None, "Bundle projects to be downloaded before creation of pack."
+        assert self.downloaded, "Bundle projects to be downloaded before creation of pack."
         IAL_repo_path = self.local_project_repo('IAL')
         args = GmkpackTool.getargs(pack_type,
                                    IAL_git_ref,
@@ -149,7 +153,7 @@ class IALBundle(object):
         :param cleanpack: if True, call cleanpack before populating
         """
         assert isinstance(pack, Pack)
-        assert self.downloaded_to is not None, "Bundle projects to be downloaded before populating a pack."
+        assert self.downloaded, "Bundle projects to be downloaded before populating a pack."
         try:
             pack.bundle_populate(self, cleanpack=cleanpack)
         except Exception:
