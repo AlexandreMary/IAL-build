@@ -33,6 +33,9 @@ if __name__ == '__main__':
                         help='Type of pack (default: incr).',
                         default='incr',
                         choices=['incr', 'main'])
+    parser.add_argument('-n', '--threads_number',
+                        help='Number of threads to be set in compilation script.',
+                        default=10)
     parser.add_argument('-u', '--no_update',
                         action='store_false',
                         help='Do not try to update local repos, so that non-commited modifications in repos are' +
@@ -77,6 +80,8 @@ if __name__ == '__main__':
                        compiler_flag=args.compiler_flag,
                        homepack=args.homepack,
                        rootpack=args.rootpack)
+    pack.ics_tune('', GMK_THREADS=int(args.threads_number))
     if args.programs != '':
         for p in GmkpackTool.parse_programs(args.programs):
-            pack.ics_build_for(p, GMK_THREADS=4)
+            pack.ics_build_for(p)
+            pack.ics_tune(p, GMK_THREADS=int(args.threads_number))

@@ -138,12 +138,14 @@ def pack_build_executables(pack,
     try:
         if not pack.ics_available_for('') or regenerate_ics:
             print("(Re-)generate ics_ script ...")
-            pack.ics_build_for('', **other_options)
+            pack.ics_build_for('', silent=silent)
     except Exception as e:
         message = "... ics_ generation failed: {}".format(str(e))
         print(message)
         build_report['compilation'] = {'OK':False, 'Output':message}
     else:
+        print("Tune ics_ ...")
+        pack.ics_tune('', **other_options)
         print("Run ics_ ...")
         compile_output = pack.compile('',
                                       silent=silent,
@@ -169,7 +171,7 @@ def pack_build_executables(pack,
         try:
             if not pack.ics_available_for(program) or regenerate_ics:
                 print("(Re-)generate ics_{} script ...".format(program.lower()))
-                pack.ics_build_for(program, **other_options)
+                pack.ics_build_for(program, silent=silent)
         except Exception as e:
             message = "... ics_{} generation failed: {}".format(program, str(e))
             print(message)
@@ -178,6 +180,8 @@ def pack_build_executables(pack,
             else:
                 build_report[program] = {'OK':False, 'Output':message}
         else:  # ics_ generation OK
+            print("Tune ics_{}".format(program))
+            pack.ics_tune(program, **other_options)
             print("Run ics_{} ...".format(program))
             compile_output = pack.compile(program,
                                           silent=silent,

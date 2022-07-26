@@ -129,13 +129,14 @@ class Pack(object):
         """Whether the compilation script exists for **program**."""
         return os.path.exists(self.ics_path_for(program))
 
-    def ics_build_for(self, program, silent=False,
-                      GMK_THREADS=32,
-                      Ofrt=4,
-                      partition=None,
-                      no_compilation=False,
-                      no_libs_update=False):
-        """Build the 'ics_*' script for **program**."""
+    def ics_build_for(self, program, silent=False):
+        """
+        Build the 'ics_*' script for **program**.
+
+        :param silent: mute gmkpack command
+
+        Other arguments used to be passed to tune_ics(...) method; this method is now to be called independently.
+        """
         args = self.genesis_arguments
         args.update({'-p':program.lower()})
         if os.path.exists(self.ics_path_for(program)):
@@ -143,16 +144,34 @@ class Pack(object):
         args.update({'-h':self.homepack})
         # build ics
         GmkpackTool.commandline(args, self.genesis_options, silent=silent)
+
+    def ics_tune(self, program,
+                 GMK_THREADS=32,
+                 Ofrt=None,
+                 partition=None,
+                 no_compilation=False,
+                 no_libs_update=False):
+        """
+        Tune the 'ics_*' script for **program**.
+
+        :param GMK_THREADS: number of threads with which gmkpack will compile (recommended: 10)
+        :param Ofrt: optimization level, e.g. 4 for nominal or 2 for bound-checking
+        :param partition: jobs scheduler partition
+        :param no_compilation: switch off compilation
+        :param no_libs_update: switch off update of libraries
+        """
         # modify number of threads
-        pattern = 'export GMK_THREADS=(\d+)'
-        self._ics_modify(program,
-                         re.compile(pattern),
-                         pattern.replace('(\d+)', str(GMK_THREADS)))
+        if GMK_THREADS is not None:
+            pattern = 'export GMK_THREADS=(\d+)'
+            self._ics_modify(program,
+                             re.compile(pattern),
+                             pattern.replace('(\d+)', str(GMK_THREADS)))
         # modify optimization level
-        pattern = 'Ofrt=(\d)'
-        self._ics_modify(program,
-                         re.compile(pattern),
-                         pattern.replace('(\d)', str(Ofrt)))
+        if Ofrt is not None:
+            pattern = 'Ofrt=(\d)'
+            self._ics_modify(program,
+                             re.compile(pattern),
+                             pattern.replace('(\d)', str(Ofrt)))
         # modify partition
         if partition is not None:
             pattern = '\#SBATCH -p (.+)'
