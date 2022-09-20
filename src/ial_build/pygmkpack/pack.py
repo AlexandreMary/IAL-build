@@ -362,7 +362,7 @@ class Pack(object):
         print(msg + "\n" + "-" * len(msg))
         for package, properties in GMKPACK_HUB_PACKAGES.items():
             rootdir = properties[host_name()]
-            version = properties[latest_main_release]
+            version = properties.get(latest_main_release, properties['default_version'])
             project = properties['project']
             print("Package: '{}/{}' (v{}) from {}".format(project, package, version, rootdir))
             pkg_src = os.path.join(rootdir, package, version)
