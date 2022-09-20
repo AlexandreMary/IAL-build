@@ -282,7 +282,7 @@ class GmkpackTool(object):
                 homepack=None,
                 rootpack=None):
         """
-        Build args for incremental pack.
+        Build args to gmkpack command for creating a pack.
 
         :param pack_type: type of pack, among ('incr', 'main')
         :param IAL_git_ref: IAL git reference
