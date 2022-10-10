@@ -24,8 +24,8 @@ if __name__ == '__main__':
     parser.add_argument('git_ref',
                         help='Git ref: branch or tag.')
     parser.add_argument('-l', '--compiler_label',
-                        default=GmkpackTool.get_compiler_label(),
-                        help='Compiler label.')
+                        default=GmkpackTool.get_compiler_label(fatal=False),
+                        help='Compiler label (default: {}).'.format(GmkpackTool.get_compiler_label(fatal=False)))
     parser.add_argument('-o', '--compiler_flag',
                         help='Compiler flag.',
                         default=DEFAULT_COMPILER_FLAG)

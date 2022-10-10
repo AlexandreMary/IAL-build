@@ -24,7 +24,7 @@ class GmkpackTool(object):
     _default_branch_radical = 'main'
     _default_version_number = '00'
     _default_compiler_flag = DEFAULT_PACK_COMPILER_FLAG
-    _OPTIONSPACK_re = re.compile('GMKFILE=(?P<gmkfile>.+)\s+<= -l (?P<label>\w+)\s+ -o (?P<flag>\w+)$')
+    _OPTIONSPACK_re = re.compile('GMKFILE=(?P<gmkfile>.+)\s+<= -l (?P<label>\w+)\s+-o (?P<flag>\w+)$')
     OFFICIAL_PACKS_re = IAL_OFFICIAL_PACKS_re
 
     @staticmethod
@@ -137,7 +137,7 @@ class GmkpackTool(object):
         return rootpack if rootpack != '' else None
 
     @classmethod
-    def get_compiler_label(cls, compiler_label=None):
+    def get_compiler_label(cls, compiler_label=None, fatal=True):
         """Get compiler label, either from argument (if not None) or from env var $GMKFILE."""
         if compiler_label in (None, ''):
             # get GMKFILE
@@ -153,7 +153,10 @@ class GmkpackTool(object):
                     compiler_label = m.group('label').strip()
                     break
         if compiler_label in (None, ''):
-            raise ValueError("Compiler label not found, neither through env ($GMKFILE/optionspack) nor by argument")
+            if fatal:
+                raise ValueError("Compiler label not found, neither through env ($GMKFILE/optionspack) nor by argument")
+            else:
+                compiler_label = "No default found."
         return compiler_label
 
     @classmethod
