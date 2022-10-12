@@ -14,9 +14,10 @@ sys.path.insert(0, os.path.join(repo_path, 'src'))
 
 from ial_build.algos import IALgitref2pack
 from ial_build.pygmkpack import GmkpackTool
-from ial_build.config import DEFAULT_IAL_REPO
-
-DEFAULT_COMPILER_FLAG = os.environ.get('GMK_OPT', '2y')
+from ial_build.config import (DEFAULT_IAL_REPO,
+                              DEFAULT_IALBUNDLE_REPO,
+                              DEFAULT_BUNDLE_CACHE_DIR,
+                              DEFAULT_PACK_COMPILER_FLAG)
 
 
 if __name__ == '__main__':
@@ -27,8 +28,8 @@ if __name__ == '__main__':
                         default=GmkpackTool.get_compiler_label(fatal=False),
                         help='Compiler label (default: {}).'.format(GmkpackTool.get_compiler_label(fatal=False)))
     parser.add_argument('-o', '--compiler_flag',
-                        help='Compiler flag.',
-                        default=DEFAULT_COMPILER_FLAG)
+                        help='Compiler flag (default: {}).'.format(DEFAULT_PACK_COMPILER_FLAG),
+                        default=DEFAULT_PACK_COMPILER_FLAG)
     parser.add_argument('-t', '--packtype',
                         help='Type of pack (default: incr).',
                         default='incr',
@@ -56,9 +57,27 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--rootpack',
                         help="Home of root packs to start from, for incremental packs. Cf. Gmkpack's $ROOTPACK",
                         default=None)
+    parser.add_argument('--hub_bundle_repo_path', '--hbrp',
+                        help="Main packs only: path to the 'IAL-bundle' repository, " +
+                             "that contains bundle for populating hub packages in a main pack. " +
+                             "Default: " + DEFAULT_IALBUNDLE_REPO,
+                        default=DEFAULT_IALBUNDLE_REPO)
+    parser.add_argument('--hub_bundle_cache_dir', '--hbcd',
+                        help="Main packs only: path to the directory in which to find/download bundled hub packages. " +
+                             "Default: " + DEFAULT_BUNDLE_CACHE_DIR,
+                        default=DEFAULT_BUNDLE_CACHE_DIR)
+    parser.add_argument('--hub_bundle_update_not', '--hbun',
+                        action='store_false',
+                        dest='hub_bundle_update',
+                        help="Main packs only: not to update=download bundled hub packages from their remote, " +
+                             "so that no 'git fetch' and 'git checkout' is required",
+                        default=True)
     args = parser.parse_args()
     pack = IALgitref2pack(args.git_ref,
                           args.repository,
+                          bundle_repo_path=args.hub_bundle_repo_path,
+                          bundle_cache_dir=args.hub_bundle_cache_dir,
+                          bundle_update=args.hub_bundle_update,
                           pack_type=args.packtype,
                           preexisting_pack=args.preexisting_pack,
                           clean_if_preexisting=args.clean_if_preexisting,

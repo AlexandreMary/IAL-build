@@ -24,11 +24,17 @@ IAL_DOC_OUTPUT_DIR = os.path.join(os.environ['HOME'], 'tmp','prep_doc')
 
 DEFAULT_BUNDLE_CACHE_DIR = os.path.join(os.environ['HOME'], 'bundles')
 
+# default repository for IAL
 DEFAULT_IAL_REPO = os.environ.get('DEFAULT_IAL_REPO')
 if DEFAULT_IAL_REPO in ('', None):
     _git_homepack = os.environ.get('GIT_HOMEPACK', os.path.join(os.environ['HOME'], 'repositories'))
     DEFAULT_IAL_REPO = os.path.join(_git_homepack, 'IAL')
-DEFAULT_PACK_COMPILER_FLAG = '2y'
+# default repository for IAL-bundle
+DEFAULT_IALBUNDLE_REPO = os.environ.get('DEFAULT_IALBUNDLE_REPO')
+if DEFAULT_IALBUNDLE_REPO in ('', None):
+    DEFAULT_IALBUNDLE_REPO = os.path.join(os.environ['HOME'], 'repositories', 'IAL-bundle')
+# default gmkpack compiler flag
+DEFAULT_PACK_COMPILER_FLAG = os.environ.get('GMK_OPT', 'x')
 
 # temporary => UNTIL USE OF BUNDLE
 _ecSDK_dir = {'belenos':'/home/gmap/mrpe/mary/public/ecSDK',
@@ -39,6 +45,7 @@ GMKPACK_HUB_PACKAGES = {'eckit':{'CY48':'1.4.4',
                                  'CY48T1':'mf_1.4.4_for48T2',
                                  'CY48T2':'mf_1.4.4_for48T2',
                                  'CY48T3':'mf_1.4.4_for48T2',
+                                 'CY48T3_mrg48R1.01':'1.19.0',
                                  'CY46T1':'1.4.4',
                                  'default_version':'mf_1.4.4_for48T2',
                                  'project':'ecSDK'},
@@ -46,6 +53,7 @@ GMKPACK_HUB_PACKAGES = {'eckit':{'CY48':'1.4.4',
                                  'CY48T1':'0.6.4',
                                  'CY48T2':'0.6.4',
                                  'CY48T3':'0.6.4',
+                                 'CY48T3_mrg48R1.01':'0.9.5',
                                  'CY46T1':'0.6.4',
                                  'default_version':'0.6.4',
                                  'project':'ecSDK'},
@@ -53,9 +61,10 @@ GMKPACK_HUB_PACKAGES = {'eckit':{'CY48':'1.4.4',
                                    'CY48T1':'3.1.0',
                                    'CY48T2':'3.1.0',
                                    'CY48T3':'3.1.0',
+                                   'CY48T3_mrg48R1.01':'3.7.0',
                                    'CY46T1':'3.1.0',
                                    'default_version':'3.1.0',
-                                   'project':'ecSDK'}
+                                   'project':'ecSDK'},
                         }
 for p in GMKPACK_HUB_PACKAGES.keys():
     GMKPACK_HUB_PACKAGES[p].update(**_ecSDK_dir)

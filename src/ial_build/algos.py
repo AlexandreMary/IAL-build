@@ -9,15 +9,45 @@ import json
 import os
 import copy
 import shutil
+import tempfile
+import re
 
-from .repositories import IALview
+from .repositories import IALview, GitProxy
 from .pygmkpack import (Pack, PackError, GmkpackTool,
                         USUAL_BINARIES)
 from .bundle import IALBundle
+from .config import DEFAULT_IAL_REPO, DEFAULT_IALBUNDLE_REPO, DEFAULT_BUNDLE_CACHE_DIR
 
+
+def find_bundle_for(IAL_git_ref,
+                    IAL_repo_path=DEFAULT_IAL_REPO,
+                    bundle_repo_path=DEFAULT_IALBUNDLE_REPO):
+    """
+    Find a consistent bundle in IAL-bundle repository for the given IAL_git_ref.
+    """
+    IAL = IALview(IAL_repo_path, IAL_git_ref, need_for_checkout=False)
+    bundles = GitProxy(bundle_repo_path)
+    for t in IAL.official_tagged_ancestors[::-1]:
+        # for a tag syntaxed 'CY<id>', bundle tag is 'BDL<id>'
+        matching = [btag for btag in bundles.tags
+                    if re.match('BDL{}-.+'.format(t[2:]), btag)]
+        if len(matching) > 0:
+            break
+    if len(matching) == 1:
+        bundle_ref = matching[0]
+        print("Found 1 tagged bundle '{}' for IAL tagged ancestor '{}'".format(bundle_ref, t))
+        tmp_bundle = tempfile.mkstemp(suffix='.yml')[1]
+        print("Using temporary file for bundle:", tmp_bundle)
+        bundles.extract_file_from_to(bundle_ref, 'bundle.yml', tmp_bundle)
+    else:
+        raise ValueError("Found 0 or multiple matching tags for {}: {}".format(t, matching))
+    return IALBundle(tmp_bundle, ID=bundle_ref)
 
 def IALgitref2pack(IAL_git_ref,
                    IAL_repo_path,
+                   bundle_repo_path=DEFAULT_IALBUNDLE_REPO,
+                   bundle_cache_dir=DEFAULT_BUNDLE_CACHE_DIR,
+                   bundle_update=True,
                    pack_type='incr',
                    preexisting_pack=False,
                    clean_if_preexisting=False,
@@ -28,6 +58,8 @@ def IALgitref2pack(IAL_git_ref,
     """
     Make a pack out of a bundle.
 
+    :param bundle_repo_path: 'IAL-bundle' repository in which to find bundles
+    :param bundle_cache_dir: cache directory in which to download/update repositories for the hub
     :param pack_type: type of pack, among ('incr', 'main')
     :param preexisting_pack: assume the pack already preexists
     :param clean_if_preexisting: if True, call cleanpack before populating a preexisting pack
@@ -61,8 +93,17 @@ def IALgitref2pack(IAL_git_ref,
             pack.cleanpack()
     # then populate
     if pack_type == 'main':
+        # hub
+        print("Populate pack hub using bundle...")
+        hub_bundle = find_bundle_for(IAL_git_ref,
+                                     IAL_repo_path=IAL_repo_path,
+                                     bundle_repo_path=bundle_repo_path)
+        hub_bundle.download(cache_dir=bundle_cache_dir,
+                            update=bundle_update)
+        pack.populate_hub_from_bundle(hub_bundle)
+        #pack.populate_hub(view.latest_main_release_ancestor)
+        # src/local/
         pack.populate_from_IALview_as_main(view)
-        pack.populate_hub(view.latest_main_release_ancestor)
     elif pack_type == 'incr':
         pack.populate_from_IALview_as_incremental(view)
     print("Pack successfully populated: " + pack.abspath)

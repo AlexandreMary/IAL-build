@@ -351,6 +351,26 @@ class Pack(object):
                 raise GitError("Don't know what to do with files which Git status is: " + k)
         self.write_view_info(view)
 
+    def populate_hub_from_bundle(self, bundle):
+        """
+        Populate hub from bundle.
+
+        :param bundle: the ial_build.bundle.IALBundle object.
+        """
+        hub_components = {component:config for component, config in bundle.projects.items()
+                          if self.bundle_component_destination(component, config).startswith('hub')}
+        msg = "Populating components in pack's hub:"
+        print("\n" + msg + "\n" + "=" * len(msg))
+        for component, config in hub_components.items():
+            self.bundle_populate_component(component,
+                                           bundle)
+        # log
+        openmode = 'a' if os.path.exists(self.origin_filepath) else 'w'
+        with io.open(self.origin_filepath, openmode) as f:
+            f.write('-' * 80 + '\n')
+            f.write("Hub populated from bundle '{}':\n".format(bundle.ID))
+            bundle.dump(f)
+
     def populate_hub(self, latest_main_release):
         """
         Populate hub packages in main pack.

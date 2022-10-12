@@ -7,6 +7,7 @@ Utility to deal with bundles in sight of their build.
 import six
 import json
 import os
+import io
 
 from .pygmkpack import Pack, GmkpackTool
 from .config import DEFAULT_BUNDLE_CACHE_DIR
@@ -15,12 +16,16 @@ from .repositories import GitProxy
 
 class IALBundle(object):
 
-    def __init__(self, bundle_file):
+    def __init__(self, bundle_file, ID=None):
         """
         :param bundle: bundle file (yaml)
         """
         from ecbundle.bundle import Bundle
         self.bundle_file = bundle_file
+        if ID is None:
+            self.ID = os.path.basename(bundle_file)
+        else:
+            self.ID = ID
         self.ecbundle = Bundle(self.bundle_file)
         self.projects = {}
         for project in self.ecbundle.get('projects'):
@@ -80,6 +85,11 @@ class IALBundle(object):
             for t in repo.tags_history(self.projects[p]['version']):
                 history[p].extend(t)
         return history
+
+    def dump(self, f):
+        """Dump back the bundle in an open bundle file handler."""
+        with io.open(self.bundle_file, 'r') as b:
+            f.writelines(b.readlines())
 
 # gmkpack binding -------------------------------------------------------------
 

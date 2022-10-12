@@ -39,11 +39,13 @@ class GitProxy(object):
         finally:
             os.chdir(owd)
 
-    def _git_cmd(self, cmd, stderr=None):
+    def _git_cmd(self, cmd, stderr=None, strip=True):
         """Wrapper to execute a git command."""
-        return [line.strip() for line in
-                subprocess.check_output(cmd, cwd=self.repository, stderr=stderr).decode('utf-8').split('\n')
-                if line != '']
+        out = subprocess.check_output(cmd, cwd=self.repository, stderr=stderr).decode('utf-8').split('\n')
+        if strip:
+            return [line.strip() for line in out if line != '']
+        else:
+            return out
 
     # Repository ---------------------------------------------------------------
 
@@ -474,6 +476,12 @@ class GitProxy(object):
         status = self._git_cmd(git_cmd)
         return len(status) == 0
 
+    def extract_file_from_to(self, git_ref, filepath, destination):
+        """Extract **filepath** from **git_ref** to a **destination** file, potentially outside the repo."""
+        git_cmd = ['git', 'show', '{}:{}'.format(git_ref, filepath)]
+        f = self._git_cmd(git_cmd, strip=False)
+        with io.open(destination, 'w') as out:
+            out.writelines([l + '\n' for l in f])
 
 class IALview(object):
     """Utilities around IAL repository."""
@@ -481,6 +489,7 @@ class IALview(object):
     _re_branches = IAL_BRANCHES_re
 
     def __init__(self, repository, ref,
+                 need_for_checkout=True,
                  remote='origin',
                  new_branch=False,
                  start_ref=None,
@@ -489,6 +498,9 @@ class IALview(object):
         """
         Hold **ref** from **repository**.
 
+        :param need_for_checkout: if False, do not checkout **ref** when initializing.
+                                  WARNING: this is hazardous, a number of methods may not work !
+                                  Better know what you are doing !
         :param remote: fetch ref from a remote
         :param new_branch: if the **ref** is a new branch to be created
         :param start_ref: start reference, in case a new branch to be created
@@ -504,27 +516,23 @@ class IALview(object):
         # initial state (to get back at the end)
         self.initial_checkedout = self.git_proxy.currently_checkedout
         # determine if need to checkout
-        if self.git_proxy.ref_exists(ref):
-            assert not new_branch, "ref: {} already exists, while **new_branch** is True.".format(ref)
-            if self.git_proxy.ref_is_branch(ref):
-                need_for_checkout = (self.initial_checkedout != ref)
-            elif self.git_proxy.ref_is_tag(ref):
-                if self.git_proxy.tag_points_to(ref) == self.git_proxy.latest_commit and self.git_proxy.is_clean:
-                    # ref is a tag, HEAD points on same commit and working copy is clean
+        if need_for_checkout:
+            if self.git_proxy.ref_exists(ref):
+                assert not new_branch, "ref: {} already exists, while **new_branch** is True.".format(ref)
+                if self.git_proxy.ref_is_branch(ref):
+                    need_for_checkout = (self.initial_checkedout != ref)
+                elif self.git_proxy.ref_is_tag(ref):
+                    if self.git_proxy.tag_points_to(ref) == self.git_proxy.latest_commit and self.git_proxy.is_clean:
+                        # ref is a tag, HEAD points on same commit and working copy is clean
+                        need_for_checkout = False
+                elif ref == 'HEAD':
                     need_for_checkout = False
-                else:
-                    need_for_checkout = True
-            elif ref == 'HEAD':
-                need_for_checkout = False
-            else:  # regular commit
-                if self.git_proxy.latest_commit == ref:
-                    need_for_checkout = False
-                else:
-                    need_for_checkout = True
-        else:
-            assert new_branch, ("ref:'{}' does not exist in repository:'{}'; ".format(ref, self.repository) +
-                                "cannot checkout unless **new_branch**.")
-            need_for_checkout = True
+                else:  # regular commit
+                    if self.git_proxy.latest_commit == ref:
+                        need_for_checkout = False
+            else:
+                assert new_branch, ("ref:'{}' does not exist in repository:'{}'; ".format(ref, self.repository) +
+                                    "cannot checkout unless **new_branch**.")
         # actual checkout if needed
         if need_for_checkout:
             # need to switch branch
