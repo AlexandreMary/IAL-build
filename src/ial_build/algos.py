@@ -19,11 +19,12 @@ from .bundle import IALBundle
 from .config import DEFAULT_IAL_REPO, DEFAULT_IALBUNDLE_REPO, DEFAULT_BUNDLE_CACHE_DIR
 
 
-def find_bundle_for(IAL_git_ref,
+def find_bundle_for(IAL_git_ref=None,
                     IAL_repo_path=DEFAULT_IAL_REPO,
                     bundle_repo_path=DEFAULT_IALBUNDLE_REPO):
     """
-    Find a consistent bundle in IAL-bundle repository for the given IAL_git_ref.
+    Find a consistent bundle in IAL-bundle repository for the given **IAL_git_ref**.
+    If IAL_git_ref==None, take the currently checkedout ref.
     """
     IAL = IALview(IAL_repo_path, IAL_git_ref, need_for_checkout=False)
     bundles = GitProxy(bundle_repo_path)
@@ -57,6 +58,7 @@ def IALgitref2pack(IAL_git_ref,
                    rootpack=None):
     """
     Make a pack out of a bundle.
+    If IAL_git_ref==None, take the currently checkedout ref.
 
     :param bundle_repo_path: 'IAL-bundle' repository in which to find bundles
     :param bundle_cache_dir: cache directory in which to download/update repositories for the hub
@@ -69,10 +71,13 @@ def IALgitref2pack(IAL_git_ref,
     :param rootpack: diretory in which to look for root pack (incr packs only)
     """
     view = IALview(IAL_repo_path, IAL_git_ref)
+    s = "Exporting '{}' to pack...".format(view.ref)
+    print(s)
+    print("=" * len(s))
     # pack
     if not preexisting_pack:
         args = GmkpackTool.getargs(pack_type,
-                                   IAL_git_ref,
+                                   view.ref,  # and not IAL_git_ref because None will end up in currently checkedout
                                    IAL_repo_path,
                                    compiler_label=compiler_label,
                                    compiler_flag=compiler_flag,
@@ -84,7 +89,7 @@ def IALgitref2pack(IAL_git_ref,
             print("Creation of pack failed !")
             raise
     else:
-        packname = GmkpackTool.guess_pack_name(IAL_git_ref, compiler_label, compiler_flag,
+        packname = GmkpackTool.guess_pack_name(view.ref, compiler_label, compiler_flag,
                                                pack_type=pack_type,
                                                IAL_repo_path=IAL_repo_path)
         pack = Pack(packname,
@@ -95,13 +100,13 @@ def IALgitref2pack(IAL_git_ref,
     if pack_type == 'main':
         # hub
         print("Populate pack hub using bundle...")
-        hub_bundle = find_bundle_for(IAL_git_ref,
+        hub_bundle = find_bundle_for(view.ref,
                                      IAL_repo_path=IAL_repo_path,
                                      bundle_repo_path=bundle_repo_path)
         hub_bundle.download(cache_dir=bundle_cache_dir,
                             update=bundle_update)
         pack.populate_hub_from_bundle(hub_bundle)
-        #pack.populate_hub(view.latest_main_release_ancestor)
+        # old way: pack.populate_hub(view.latest_main_release_ancestor)
         # src/local/
         pack.populate_from_IALview_as_main(view)
     elif pack_type == 'incr':

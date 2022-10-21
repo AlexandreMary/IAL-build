@@ -23,7 +23,9 @@ from ial_build.config import (DEFAULT_IAL_REPO,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Make or populate a pack from Git.')
     parser.add_argument('git_ref',
-                        help='Git ref: branch or tag.')
+                        help='Git ref: branch or tag. WARNING: if none is provided, the currently checked out ref is taken.',
+                        nargs='?',
+                        default=None)
     parser.add_argument('-l', '--compiler_label',
                         default=GmkpackTool.get_compiler_label(fatal=False),
                         help='Compiler label (default: {}).'.format(GmkpackTool.get_compiler_label(fatal=False)))
@@ -35,7 +37,7 @@ if __name__ == '__main__':
                         default='incr',
                         choices=['incr', 'main'])
     parser.add_argument('-n', '--threads_number',
-                        help='Number of threads to be set in compilation script.',
+                        help='Number of threads to be set in compilation script (default:10).',
                         default=10)
     parser.add_argument('-e', '--preexisting_pack',
                         action='store_true',
@@ -46,7 +48,7 @@ if __name__ == '__main__':
                         help='Call cleanpack.',
                         default=False)
     parser.add_argument('-r', '--repository',
-                        help='Location of the Git repository in which to populate branch (defaults to: {}).'.format(DEFAULT_IAL_REPO),
+                        help='Location of the IAL Git repository (defaults to: {}).'.format(DEFAULT_IAL_REPO),
                         default=DEFAULT_IAL_REPO)
     parser.add_argument('-p', '--programs',
                         help="Programs which ics_{p} script to be generated, e.g. 'masterodb' or 'masterodb,bator'",
