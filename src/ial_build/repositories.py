@@ -23,6 +23,7 @@ class GitError(Exception):
 class GitProxy(object):
 
     re_author_in_commit = re.compile('Author: (?P<name>.+) <(?P<email>.+@.+)>$')
+    re_detached_HEAD = re.compile('^\* \(HEAD detached at (?P<ref>.+)\)$')
 
     def __init__(self, repository='.'):
         self.repository = os.path.abspath(repository)
@@ -67,8 +68,6 @@ class GitProxy(object):
         if remote is not None:
             git_cmd.append(remote)
         self._git_cmd(git_cmd)
-
-    re_detached_HEAD = re.compile('^\* \(HEAD detached at (?P<ref>.+)\)$')
 
     @property
     def currently_checkedout(self):
@@ -488,7 +487,8 @@ class IALview(object):
     _re_official_tags = IAL_OFFICIAL_TAGS_re
     _re_branches = IAL_BRANCHES_re
 
-    def __init__(self, repository, ref,
+    def __init__(self, repository,
+                 ref=None,
                  need_for_checkout=True,
                  remote='origin',
                  new_branch=False,
@@ -496,7 +496,7 @@ class IALview(object):
                  register_in_GCOdb=False,
                  fetch=False):
         """
-        Hold **ref** from **repository**.
+        Hold **ref** from **repository**. If **ref** is None, takes the currently checked out ref.
 
         :param need_for_checkout: if False, do not checkout **ref** when initializing.
                                   WARNING: this is hazardous, a number of methods may not work !
@@ -508,8 +508,10 @@ class IALview(object):
         :param fetch: to fetch branch on remote or not
         """
         self.repository = os.path.abspath(repository)
-        self.ref = ref
         self.git_proxy = GitProxy(self.repository)
+        if ref is None:
+            ref = self.git_proxy.currently_checkedout
+        self.ref = ref
         if fetch:
             self.git_proxy.fetch(remote=remote,
                                  ref=ref if remote is not None else None)
