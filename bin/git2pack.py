@@ -59,8 +59,8 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--rootpack',
                         help="Home of root packs to start from, for incremental packs. Cf. Gmkpack's $ROOTPACK",
                         default=None)
-    parser.add_argument('--hub_bundle_repo_path', '--hbrp',
-                        help="Main packs only: path to the 'IAL-bundle' repository, " +
+    parser.add_argument('--hub_bundle_origin_repo', '--hbor',
+                        help="Main packs only: URL of the 'IAL-bundle' repository to clone, " +
                              "that contains bundle for populating hub packages in a main pack. " +
                              "Default: " + DEFAULT_IALBUNDLE_REPO,
                         default=DEFAULT_IALBUNDLE_REPO)
@@ -77,7 +77,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     pack = IALgitref2pack(args.git_ref,
                           args.repository,
-                          bundle_repo_path=args.hub_bundle_repo_path,
+                          IAL_bundle_origin_repo=args.hub_bundle_origin_repo,
                           bundle_cache_dir=args.hub_bundle_cache_dir,
                           bundle_update=args.hub_bundle_update,
                           pack_type=args.packtype,

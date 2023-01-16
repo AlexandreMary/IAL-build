@@ -475,12 +475,24 @@ class GitProxy(object):
         status = self._git_cmd(git_cmd)
         return len(status) == 0
 
-    def extract_file_from_to(self, git_ref, filepath, destination):
-        """Extract **filepath** from **git_ref** to a **destination** file, potentially outside the repo."""
+    def extract_file_from_to(self, git_ref, filepath,
+                             destination=None,
+                             overwrite=False):
+        """
+        Extract **filepath** from **git_ref** to a **destination** file, potentially outside the repo.
+
+        :param overwrite: to allow overwriting of existing target file
+        """
         git_cmd = ['git', 'show', '{}:{}'.format(git_ref, filepath)]
         f = self._git_cmd(git_cmd, strip=False)
+        if destination is None:
+            destination = tempfile.mkstemp()
+        if os.path.exists(destination) and not overwrite:
+            raise IOError("File '{}' already exists".format(destination))
         with io.open(destination, 'w') as out:
             out.writelines([l + '\n' for l in f])
+        return destination
+
 
 class IALview(object):
     """Utilities around IAL repository."""

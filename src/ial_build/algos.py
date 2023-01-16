@@ -9,45 +9,19 @@ import json
 import os
 import copy
 import shutil
-import tempfile
 import re
 
 from .repositories import IALview, GitProxy
 from .pygmkpack import (Pack, PackError, GmkpackTool,
                         USUAL_BINARIES)
-from .bundle import IALBundle
-from .config import DEFAULT_IAL_REPO, DEFAULT_IALBUNDLE_REPO, DEFAULT_BUNDLE_CACHE_DIR
+from .bundle import IALBundle, TmpIALbundleRepo
+from .config import DEFAULT_IAL_REPO, DEFAULT_BUNDLE_CACHE_DIR
 
-
-def find_bundle_for(IAL_git_ref=None,
-                    IAL_repo_path=DEFAULT_IAL_REPO,
-                    bundle_repo_path=DEFAULT_IALBUNDLE_REPO):
-    """
-    Find a consistent bundle in IAL-bundle repository for the given **IAL_git_ref**.
-    If IAL_git_ref==None, take the currently checkedout ref.
-    """
-    IAL = IALview(IAL_repo_path, IAL_git_ref, need_for_checkout=False)
-    bundles = GitProxy(bundle_repo_path)
-    for t in IAL.official_tagged_ancestors[::-1]:
-        # for a tag syntaxed 'CY<id>', bundle tag is 'BDL<id>'
-        matching = [btag for btag in bundles.tags
-                    if re.match('BDL{}-.+'.format(t[2:]), btag)]
-        if len(matching) > 0:
-            break
-    if len(matching) == 1:
-        bundle_ref = matching[0]
-        print("Found 1 tagged bundle '{}' for IAL tagged ancestor '{}'".format(bundle_ref, t))
-        tmp_bundle = tempfile.mkstemp(suffix='.yml')[1]
-        print("Using temporary file for bundle:", tmp_bundle)
-        bundles.extract_file_from_to(bundle_ref, 'bundle.yml', tmp_bundle)
-    else:
-        raise ValueError("Found 0 or multiple matching tags for {}: {}".format(t, matching))
-    return IALBundle(tmp_bundle, ID=bundle_ref)
 
 def IALgitref2pack(IAL_git_ref,
                    IAL_repo_path,
-                   bundle_repo_path=DEFAULT_IALBUNDLE_REPO,
-                   bundle_cache_dir=DEFAULT_BUNDLE_CACHE_DIR,
+                   IAL_bundle_origin_repo=None,
+                   bundle_cache_dir=None,
                    bundle_update=True,
                    pack_type='incr',
                    preexisting_pack=False,
@@ -57,11 +31,15 @@ def IALgitref2pack(IAL_git_ref,
                    homepack=None,
                    rootpack=None):
     """
-    Make a pack out of a bundle.
+    Make a pack out of an **IAL_git_ref** within an **IAL_repo_path** repository.
     If IAL_git_ref==None, take the currently checkedout ref.
+    An IAL bundle may be necessary (determined and cloned on the fly) for main packs hub packages.
 
-    :param bundle_repo_path: 'IAL-bundle' repository in which to find bundles
+    :param IAL_bundle_origin_repo: URL of IAL-bundle repository to clone, in which to look for bundle tag.
+                                   Can be local (e.g. ~user/IAL-bundle)
+                                   or distant (e.g. https://github.com/ACCORD-NWP/IAL-bundle.git).
     :param bundle_cache_dir: cache directory in which to download/update repositories for the hub
+    :param bundle_update: if bundle repositories are to be updated/checkedout
     :param pack_type: type of pack, among ('incr', 'main')
     :param preexisting_pack: assume the pack already preexists
     :param clean_if_preexisting: if True, call cleanpack before populating a preexisting pack
@@ -100,13 +78,13 @@ def IALgitref2pack(IAL_git_ref,
     if pack_type == 'main':
         # hub
         print("Populate pack hub using bundle...")
-        hub_bundle = find_bundle_for(view.ref,
-                                     IAL_repo_path=IAL_repo_path,
-                                     bundle_repo_path=bundle_repo_path)
+        IALbundles = TmpIALbundleRepo(IAL_bundle_origin_repo, verbose=True)
+        hub_bundle = IALbundles.get_bundle_for_IAL_git_ref(IAL_repo_path,
+                                                           IAL_git_ref=IAL_git_ref)
+        print("bundle ID :", hub_bundle.ID)
         hub_bundle.download(cache_dir=bundle_cache_dir,
                             update=bundle_update)
         pack.populate_hub_from_bundle(hub_bundle)
-        # old way: pack.populate_hub(view.latest_main_release_ancestor)
         # src/local/
         pack.populate_from_IALview_as_main(view)
     elif pack_type == 'incr':
@@ -115,23 +93,27 @@ def IALgitref2pack(IAL_git_ref,
     return pack
 
 
-def bundle2pack(bundle_file,
-                pack_type='incr',
-                update=True,
-                preexisting_pack=False,
-                clean_if_preexisting=False,
-                cache_dir=None,
-                compiler_label=None,
-                compiler_flag=None,
-                homepack=None,
-                rootpack=None):
+def bundle_file2pack(bundle_file,
+                     cache_dir=None,
+                     update=True,
+                     # pack arguments
+                     pack_type='incr',
+                     preexisting_pack=False,
+                     clean_if_preexisting=False,
+                     compiler_label=None,
+                     compiler_flag=None,
+                     homepack=None,
+                     rootpack=None):
     """
-    Make a pack out of a bundle.
+    Make a pack out of a bundle file.
 
+    :param bundle_file: path of a bundle file
+    :param cache_dir: cache directory in which to download/update repositories
+    :param update: if repositories are to be updated/checkedout
+    --- pack arguments
     :param pack_type: type of pack, among ('incr', 'main')
     :param preexisting_pack: assume the pack already preexists
     :param clean_if_preexisting: if True, call cleanpack before populating a preexisting pack
-    :param cache_dir: cache directory in which to download/update repositories
     :param compiler_label: Gmkpack's compiler label to be used
     :param compiler_flag: Gmkpack's compiler flag to be used
     :param homepack: directory in which to build pack
@@ -158,6 +140,55 @@ def bundle2pack(bundle_file,
     pack.bundle_populate(b)
     print("Pack successfully populated: " + pack.abspath)
     return pack
+
+
+def bundle_tag2pack(IAL_bundle_tag,
+                    IAL_bundle_origin_repo=None,
+                    cache_dir=None,
+                    update=True,
+                    **kwargs):
+    """
+    Make a pack out of a bundle tag.
+
+    :param IAL_bundle_tag: tag of a bundle in IAL-bundle repo
+    :param IAL_bundle_origin_repo: URL of IAL-bundle repository to clone, in which to look for bundle tag.
+                                   Can be local (e.g. ~user/IAL-bundle)
+                                   or distant (e.g. https://github.com/ACCORD-NWP/IAL-bundle.git).
+    :param cache_dir: cache directory in which to download/update repositories
+    :param update: if repositories are to be updated/checkedout
+    --- other arguments:
+    cf. bundle_file2pack "pack arguments"
+    """
+    IALbundles = TmpIALbundleRepo(IAL_bundle_origin_repo, verbose=True)
+    bundle_file = IALbundles.extract_file_from_to(IAL_bundle_tag, 'bundle.yml')
+    bundle_file2pack(bundle_file, **kwargs)
+
+
+def IALgitref2pack_via_IALbundle(IAL_repo_path,
+                                 IAL_git_ref=None,
+                                 IAL_bundle_origin_repo=None,
+                                 cache_dir=None,
+                                 update=True,
+                                 **kwargs):
+    """
+    Make a pack out of a bundle tag.
+
+    :param IAL_bundle_tag: tag of a bundle in IAL-bundle repo
+    :param IAL_bundle_origin_repo: URL of IAL-bundle repository to clone, in which to look for bundle tag.
+                                   Can be local (e.g. ~user/IAL-bundle)
+                                   or distant (e.g. https://github.com/ACCORD-NWP/IAL-bundle.git).
+    :param cache_dir: cache directory in which to download/update repositories
+    :param update: if repositories are to be updated/checkedout
+    --- other arguments:
+    cf. bundle_file2pack "pack arguments"
+    """
+    IALbundles = TmpIALbundleRepo(IAL_bundle_origin_repo, verbose=True)
+    bundle = IALbundles.get_bundle_for_IAL_git_ref(IAL_repo_path,
+                                                   IAL_git_ref=IAL_git_ref)
+    bundle_file2pack(bundle.bundle_file,
+                     cache_dir=cache_dir,
+                     update=update,
+                     **kwargs)
 
 
 def pack_build_executables(pack,

@@ -32,7 +32,7 @@ if DEFAULT_IAL_REPO in ('', None):
 # default repository for IAL-bundle
 DEFAULT_IALBUNDLE_REPO = os.environ.get('DEFAULT_IALBUNDLE_REPO')
 if DEFAULT_IALBUNDLE_REPO in ('', None):
-    DEFAULT_IALBUNDLE_REPO = os.path.join(os.environ['HOME'], 'repositories', 'IAL-bundle')
+    DEFAULT_IALBUNDLE_REPO = 'https://github.com/ACCORD-NWP/IAL-bundle.git'
 # default gmkpack compiler flag
 DEFAULT_PACK_COMPILER_FLAG = os.environ.get('GMK_OPT', 'x')
 

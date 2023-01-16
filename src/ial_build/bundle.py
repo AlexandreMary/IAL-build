@@ -8,10 +8,110 @@ import six
 import json
 import os
 import io
+import tempfile
+import subprocess
+import re
+import shutil
 
 from .pygmkpack import Pack, GmkpackTool
-from .config import DEFAULT_BUNDLE_CACHE_DIR
-from .repositories import GitProxy
+from .config import DEFAULT_BUNDLE_CACHE_DIR, DEFAULT_IALBUNDLE_REPO
+from .repositories import GitProxy, IALview
+
+
+class IALbundleRepo(GitProxy):
+
+    def find_bundle_tags_for_IAL_git_ref(self, IAL_repo_path,
+                                         IAL_git_ref=None):
+        """
+        Find the most recent bundle tag(s) in IAL-bundle repository, available for **IAL_git_ref** ancestors.
+        Ancestors are looked for in **IAL_repo_path**.
+        If IAL_git_ref==None, take the currently checkedout ref.
+        """
+        IAL = IALview(IAL_repo_path, IAL_git_ref, need_for_checkout=False)
+        print("Looking for registered bundles for ancestors of '{}'".format(IAL.ref))
+        matching = []
+        for t in IAL.official_tagged_ancestors[::-1]:
+            # for a tag syntaxed 'CY<id>', bundle tag is 'BDL<id>'
+            matching = [btag for btag in self.tags
+                        if re.match('BDL{}-.+'.format(t[2:]), btag)]
+            if len(matching) > 0:
+                break
+        if matching == []:
+            raise ValueError("No bundle has been found for reference '{}' or any of its ancestors.".format(IAL.ref))
+        else:
+            return {'official_tagged_ancestor':t, 'bundles':matching}
+
+    def print_bundle_tags_for_IAL_git_ref(self, IAL_repo_path,
+                                          IAL_git_ref=None):
+        """
+        Find the most recent bundle tag(s) in IAL-bundle repository, available for **IAL_git_ref** ancestors.
+        Ancestors are looked for in **IAL_repo_path**.
+        If IAL_git_ref==None, take the currently checkedout ref.
+        """
+        bundles = self.find_bundle_tags_for_IAL_git_ref(IAL_repo_path, IAL_git_ref=IAL_git_ref)
+        print("Historised bundles associated with ancestor '{}' :".format(bundles['official_tagged_ancestor']))
+        for b in bundles['bundles']:
+            print(" - {}".format(b))
+
+    def get_bundle_for_IAL_git_ref(self, IAL_repo_path,
+                                   IAL_git_ref=None,
+                                   to_file='__tmp__',
+                                   overwrite=False):
+        """
+        Get bundle from IAL-bundle repository, coherent with the given **IAL_git_ref** ancestors.
+        Get the most recent bundle in IAL-bundle repository, available for **IAL_git_ref** ancestors.
+        Raise an error if several are found.
+        Ancestors are looked for in **IAL_repo_path**.
+        If IAL_git_ref==None, take the currently checkedout ref.
+
+        :param to_file: path/name in which to get the bundle file
+                        if '__tmp__', a unique random file is used
+                        if '__tag__, the file is ./<bundle_tag>.yml
+        :param overwrite: to allow overwriting of existing target file
+        """
+        found = self.find_bundle_tags_for_IAL_git_ref(IAL_repo_path,
+                                                      IAL_git_ref=IAL_git_ref)
+        ancestor = found['official_tagged_ancestor']
+        bundle_refs = found['bundles']
+        if len(bundle_refs) == 1:
+            bundle_ref = bundle_refs[0]
+            print("Found 1 tagged bundle '{}' for IAL tagged ancestor '{}'".format(bundle_ref, ancestor))
+            if to_file == '__tmp__':
+                to_file = tempfile.mkstemp(suffix='.yml')[1]
+                print("Using temporary file for bundle:", to_file)
+            elif to_file == '__tag__':
+                to_file = '{}.yml'.format(bundle_ref)
+                print("Copy to:", to_file)
+            self.extract_file_from_to(bundle_ref, 'bundle.yml',
+                                      destination=to_file,
+                                      overwrite=overwrite)
+        else:
+            raise ValueError("Found multiple bundles for {}: {}".format(t, matching))
+        return IALBundle(to_file, ID=bundle_ref)
+
+
+class TmpIALbundleRepo(IALbundleRepo):
+
+    def __init__(self, origin_repo=None, in_dir=None, verbose=False):
+        """
+        Temporary IALbundleRepo, cloned from **origin_repo** in directory **in_dir**.
+        If **in_dir** is None, use a tempdir.
+        Warning ! In any case, the clone repository is deleted when this object is deleted.
+        """
+        if origin_repo is None:
+            origin_repo = DEFAULT_IALBUNDLE_REPO
+        if in_dir is None:
+            in_dir = tempfile.mkdtemp()
+        subprocess.check_call(['git', 'clone', origin_repo, 'IAL-bundle'], cwd=in_dir,
+                              stdout=subprocess.DEVNULL if not verbose else subprocess.STDOUT,
+                              stderr=subprocess.DEVNULL if not verbose else subprocess.STDERR)
+        if verbose:
+            print("-" * 80)
+        super(TmpIALbundleRepo, self).__init__(os.path.join(in_dir, 'IAL-bundle'))
+
+    def __del__(self):
+        print("Delete temporary repo: {}".format(self.repository))
+        shutil.rmtree(self.repository)
 
 
 class IALBundle(object):
@@ -32,7 +132,8 @@ class IALBundle(object):
             for name, conf in project.items():
                 self.projects[name] = dict(conf)
         self.downloaded = None  # none = unknown
-        self.src_dir = DEFAULT_BUNDLE_CACHE_DIR
+        #self.src_dir = DEFAULT_BUNDLE_CACHE_DIR  # FIXME: this does not work in Davai context for some reason
+        self.src_dir = None
 
     def download(self,
                  cache_dir=None,
