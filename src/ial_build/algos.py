@@ -108,9 +108,10 @@ def bundle_file2pack(bundle_file,
     Make a pack out of a bundle file.
 
     :param bundle_file: path of a bundle file
+    --- bundle download
     :param cache_dir: cache directory in which to download/update repositories
     :param update: if repositories are to be updated/checkedout
-    --- pack arguments
+    --- pack
     :param pack_type: type of pack, among ('incr', 'main')
     :param preexisting_pack: assume the pack already preexists
     :param clean_if_preexisting: if True, call cleanpack before populating a preexisting pack
@@ -144,8 +145,6 @@ def bundle_file2pack(bundle_file,
 
 def bundle_tag2pack(IAL_bundle_tag,
                     IAL_bundle_origin_repo=None,
-                    cache_dir=None,
-                    update=True,
                     **kwargs):
     """
     Make a pack out of a bundle tag.
@@ -154,21 +153,17 @@ def bundle_tag2pack(IAL_bundle_tag,
     :param IAL_bundle_origin_repo: URL of IAL-bundle repository to clone, in which to look for bundle tag.
                                    Can be local (e.g. ~user/IAL-bundle)
                                    or distant (e.g. https://github.com/ACCORD-NWP/IAL-bundle.git).
-    :param cache_dir: cache directory in which to download/update repositories
-    :param update: if repositories are to be updated/checkedout
     --- other arguments:
-    cf. bundle_file2pack "pack arguments"
+    cf. bundle_file2pack "bundle download" and "pack" arguments
     """
     IALbundles = TmpIALbundleRepo(IAL_bundle_origin_repo, verbose=True)
     bundle_file = IALbundles.extract_file_from_to(IAL_bundle_tag, 'bundle.yml')
-    bundle_file2pack(bundle_file, **kwargs)
+    return bundle_file2pack(bundle_file, **kwargs)
 
 
 def IALgitref2pack_via_IALbundle(IAL_repo_path,
                                  IAL_git_ref=None,
                                  IAL_bundle_origin_repo=None,
-                                 cache_dir=None,
-                                 update=True,
                                  **kwargs):
     """
     Make a pack out of a bundle tag.
@@ -177,18 +172,16 @@ def IALgitref2pack_via_IALbundle(IAL_repo_path,
     :param IAL_bundle_origin_repo: URL of IAL-bundle repository to clone, in which to look for bundle tag.
                                    Can be local (e.g. ~user/IAL-bundle)
                                    or distant (e.g. https://github.com/ACCORD-NWP/IAL-bundle.git).
-    :param cache_dir: cache directory in which to download/update repositories
-    :param update: if repositories are to be updated/checkedout
     --- other arguments:
-    cf. bundle_file2pack "pack arguments"
+    cf. bundle_file2pack "bundle download" and "pack" arguments
     """
     IALbundles = TmpIALbundleRepo(IAL_bundle_origin_repo, verbose=True)
     bundle = IALbundles.get_bundle_for_IAL_git_ref(IAL_repo_path,
                                                    IAL_git_ref=IAL_git_ref)
-    bundle_file2pack(bundle.bundle_file,
-                     cache_dir=cache_dir,
-                     update=update,
-                     **kwargs)
+    return bundle_file2pack(bundle.bundle_file,
+                            cache_dir=cache_dir,
+                            update=update,
+                            **kwargs)
 
 
 def pack_build_executables(pack,

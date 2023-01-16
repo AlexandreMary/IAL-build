@@ -20,7 +20,13 @@ from ial_build.config import DEFAULT_BUNDLE_CACHE_DIR
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Make or populate a pack from a bundle.')
     parser.add_argument('bundle',
-                        help='bundle: path to bundle file.')
+                        help="Two options and syntaxes: 'file:<path to bundle file>' if providing a bundle file, " +
+                             "or 'tag:<bundle tag>' if providing a tag in IAL-bundle repo")
+    parser.add_argument('-r', '--bundle_origin_repo',
+                        help="If providing a bundle tag: URL of IAL-bundle repository to clone, " +
+                             "in which to look for bundle tag. " +
+                             "Can be local (e.g. ~user/IAL-bundle)" +
+                             "or distant (e.g. https://github.com/ACCORD-NWP/IAL-bundle.git).")
     parser.add_argument('-l', '--compiler_label',
                         help='Compiler label. Through $GMKFILE, defaults to: "{}".'.format(
                             GmkpackTool.get_compiler_label()),
@@ -71,15 +77,30 @@ if __name__ == '__main__':
                         default=GmkpackTool.get_rootpack())
     args = parser.parse_args()
 
-    pack = bundle2pack(args.bundle,
-                       pack_type=args.pack_type,
-                       update=args.update,
-                       preexisting_pack=args.preexisting_pack,
-                       clean_if_preexisting=args.clean_if_preexisting,
-                       compiler_label=args.compiler_label,
-                       compiler_flag=args.compiler_flag,
-                       homepack=args.homepack,
-                       rootpack=args.rootpack)
+    if args.bundle.startswith('file:'):
+        pack = bundle_file2pack(args.bundle[5:],
+                                cache_dir=args.cache_directory,
+                                update=args.update,
+                                pack_type=args.pack_type,
+                                preexisting_pack=args.preexisting_pack,
+                                clean_if_preexisting=args.clean_if_preexisting,
+                                compiler_label=args.compiler_label,
+                                compiler_flag=args.compiler_flag,
+                                homepack=args.homepack,
+                                rootpack=args.rootpack)
+    elif args.bundle.startswith('tag:'):
+        # bundle is provided as a tag
+        pack = bundle_tag2pack(args.bundle[4:],
+                               IAL_bundle_origin_repo=args.bundle_origin_repo,
+                               cache_dir=args.cache_directory,
+                               update=args.update,
+                               pack_type=args.pack_type,
+                               preexisting_pack=args.preexisting_pack,
+                               clean_if_preexisting=args.clean_if_preexisting,
+                               compiler_label=args.compiler_label,
+                               compiler_flag=args.compiler_flag,
+                               homepack=args.homepack,
+                               rootpack=args.rootpack)
     pack.ics_tune('', GMK_THREADS=int(args.threads_number))
     if args.programs != '':
         for p in GmkpackTool.parse_programs(args.programs):
