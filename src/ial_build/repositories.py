@@ -671,7 +671,7 @@ class IALview(object):
     def official_tagged_ancestors(self):
         """All official tagged ancestors."""
         official_tags = []
-        for tags in self.git_proxy.tags_between('CY38', 'HEAD'):  # CY38 is the first one under Git
+        for tags in self.git_proxy.tags_between('CY38', self.ref):  # CY38 is the first one under Git
             for tag in tags[::-1]:  # The latest is a priori the first one
                 if self._re_official_tags.match(tag):
                     official_tags.append(tag)
@@ -680,7 +680,7 @@ class IALview(object):
     @property
     def latest_tagged_ancestor(self):
         """Latest tagged ancestor."""
-        tags = self.git_proxy.tags_between('CY38', 'HEAD')[-1]  # CY38 is the first one under Git
+        tags = self.git_proxy.tags_between('CY38', self.ref)[-1]  # CY38 is the first one under Git
         return tags[0]
 
     @property
