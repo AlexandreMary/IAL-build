@@ -43,7 +43,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     IALbundles = TmpIALbundleRepo(args.IAL_bundle_origin_repo, verbose=args.verbose)
     IALbundles.print_bundle_tags_for_IAL_git_ref(args.repository,
-                                                 args.git_ref)
+                                                 args.git_ref,
+                                                 verbose=args.verbose)
     if args.get_copy:
         IALbundles.get_bundle_for_IAL_git_ref(args.repository,
                                               args.git_ref,

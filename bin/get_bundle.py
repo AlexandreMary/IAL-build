@@ -41,4 +41,5 @@ if __name__ == '__main__':
     IALbundles.get_bundle_for_IAL_git_ref(args.repository,
                                           args.git_ref,
                                           to_file='__tag__',
-                                          overwrite=args.overwrite)
+                                          overwrite=args.overwrite
+                                          verbose=args.verbose)

@@ -21,7 +21,8 @@ from .repositories import GitProxy, IALview
 class IALbundleRepo(GitProxy):
 
     def find_bundle_tags_for_IAL_git_ref(self, IAL_repo_path,
-                                         IAL_git_ref=None):
+                                         IAL_git_ref=None,
+                                         verbose=False):
         """
         Find the most recent bundle tag(s) in IAL-bundle repository, available for **IAL_git_ref** ancestors.
         Ancestors are looked for in **IAL_repo_path**.
@@ -36,19 +37,25 @@ class IALbundleRepo(GitProxy):
                         if re.match('BDL{}-.+'.format(t[2:]), btag)]
             if len(matching) > 0:
                 break
+            else:
+                if verbose:
+                    print("No bundle found for tag: {}".format(t))
         if matching == []:
             raise ValueError("No bundle has been found for reference '{}' or any of its ancestors.".format(IAL.ref))
         else:
             return {'official_tagged_ancestor':t, 'bundles':matching}
 
     def print_bundle_tags_for_IAL_git_ref(self, IAL_repo_path,
-                                          IAL_git_ref=None):
+                                          IAL_git_ref=None,
+                                          verbose=False):
         """
         Find the most recent bundle tag(s) in IAL-bundle repository, available for **IAL_git_ref** ancestors.
         Ancestors are looked for in **IAL_repo_path**.
         If IAL_git_ref==None, take the currently checkedout ref.
         """
-        bundles = self.find_bundle_tags_for_IAL_git_ref(IAL_repo_path, IAL_git_ref=IAL_git_ref)
+        bundles = self.find_bundle_tags_for_IAL_git_ref(IAL_repo_path,
+                                                        IAL_git_ref=IAL_git_ref,
+                                                        verbose=verbose)
         print("Historised bundles associated with ancestor '{}' :".format(bundles['official_tagged_ancestor']))
         for b in bundles['bundles']:
             print(" - {}".format(b))
@@ -56,7 +63,8 @@ class IALbundleRepo(GitProxy):
     def get_bundle_for_IAL_git_ref(self, IAL_repo_path,
                                    IAL_git_ref=None,
                                    to_file='__tmp__',
-                                   overwrite=False):
+                                   overwrite=False,
+                                   verbose=False):
         """
         Get bundle from IAL-bundle repository, coherent with the given **IAL_git_ref** ancestors.
         Get the most recent bundle in IAL-bundle repository, available for **IAL_git_ref** ancestors.
@@ -70,7 +78,8 @@ class IALbundleRepo(GitProxy):
         :param overwrite: to allow overwriting of existing target file
         """
         found = self.find_bundle_tags_for_IAL_git_ref(IAL_repo_path,
-                                                      IAL_git_ref=IAL_git_ref)
+                                                      IAL_git_ref=IAL_git_ref,
+                                                      verbose=verbose)
         ancestor = found['official_tagged_ancestor']
         bundle_refs = found['bundles']
         if len(bundle_refs) == 1:
@@ -102,9 +111,9 @@ class TmpIALbundleRepo(IALbundleRepo):
             origin_repo = DEFAULT_IALBUNDLE_REPO
         if in_dir is None:
             in_dir = tempfile.mkdtemp()
+        std = dict(stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) if not verbose else {}
         subprocess.check_call(['git', 'clone', origin_repo, 'IAL-bundle'], cwd=in_dir,
-                              stdout=subprocess.DEVNULL if not verbose else subprocess.STDOUT,
-                              stderr=subprocess.DEVNULL if not verbose else subprocess.STDERR)
+                              **std)
         if verbose:
             print("-" * 80)
         super(TmpIALbundleRepo, self).__init__(os.path.join(in_dir, 'IAL-bundle'))
