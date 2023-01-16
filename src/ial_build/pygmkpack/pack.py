@@ -488,16 +488,21 @@ class Pack(object):
         if pkg_dst.startswith('hub'):
             # packages auto-compiled, in hub
             print("\n* '{}' ({}) from repo: {} via cache: {}".format(component,
-                                                                                config['version'],
-                                                                                config['git'],
-                                                                                repository))
-            if self.is_incremental:
-                print("  ! Incremental hub packages is currently not an available feature -> populated in bulk")
-                # TODO: option in bundle to tell if to be populated in case of incr pack
-            pkg_dst = os.path.join(self.abspath, pkg_dst, component)
-            if os.path.exists(pkg_dst):
-                shutil.rmtree(pkg_dst)
-            shutil.copytree(repository, pkg_dst, symlinks=True)
+                                                                     config['version'],
+                                                                     config['git'],
+                                                                     repository))
+            if not self.is_incremental or self.is_incremental and config.get('incremental_pack', True):
+                # main pack or incremental and package to be added in hub/local
+                print("Incremental hub packages is currently not available. " +
+                      "Packages are populated in bulk or not at all, " +
+                      "depending on bundle key 'incremental_pack' (default:True).")
+                pkg_dst = os.path.join(self.abspath, pkg_dst, component)
+                if os.path.exists(pkg_dst):
+                    shutil.rmtree(pkg_dst)
+                shutil.copytree(repository, pkg_dst, symlinks=True)
+            else:
+                # incremental pack and package ignored
+                print(" ... package ignored (bundle: incremental_pack = False).")
         elif pkg_dst.startswith('src/local'):
             # components to be compiled with gmkpack, in src/local
             print("\n* Component: '{}' ({}) from repo: {} via cache: {}".format(component,

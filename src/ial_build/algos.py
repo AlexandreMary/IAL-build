@@ -157,6 +157,7 @@ def bundle_tag2pack(IAL_bundle_tag,
     cf. bundle_file2pack "bundle download" and "pack" arguments
     """
     IALbundles = TmpIALbundleRepo(IAL_bundle_origin_repo, verbose=True)
+    assert IALbundles.ref_exists(IAL_bundle_tag), "Unknown IAL-bundle tag: {}".format(IAL_bundle_tag)
     bundle_file = IALbundles.extract_file_from_to(IAL_bundle_tag, 'bundle.yml')
     return bundle_file2pack(bundle_file, **kwargs)
 

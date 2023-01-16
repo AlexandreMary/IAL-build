@@ -29,6 +29,7 @@ class IALbundleRepo(GitProxy):
         If IAL_git_ref==None, take the currently checkedout ref.
         """
         IAL = IALview(IAL_repo_path, IAL_git_ref, need_for_checkout=False)
+        assert IAL.git_proxy.ref_exists(IAL.ref), "Unknown IAL git reference: {}".format(IAL.ref)
         print("Looking for registered bundles for ancestors of '{}'".format(IAL.ref))
         matching = []
         for t in IAL.official_tagged_ancestors[::-1]:
@@ -75,28 +76,46 @@ class IALbundleRepo(GitProxy):
         :param to_file: path/name in which to get the bundle file
                         if '__tmp__', a unique random file is used
                         if '__tag__, the file is ./<bundle_tag>.yml
+                        Can also be sys.stdout
         :param overwrite: to allow overwriting of existing target file
         """
         found = self.find_bundle_tags_for_IAL_git_ref(IAL_repo_path,
                                                       IAL_git_ref=IAL_git_ref,
                                                       verbose=verbose)
         ancestor = found['official_tagged_ancestor']
-        bundle_refs = found['bundles']
-        if len(bundle_refs) == 1:
-            bundle_ref = bundle_refs[0]
-            print("Found 1 tagged bundle '{}' for IAL tagged ancestor '{}'".format(bundle_ref, ancestor))
-            if to_file == '__tmp__':
-                to_file = tempfile.mkstemp(suffix='.yml')[1]
-                print("Using temporary file for bundle:", to_file)
-            elif to_file == '__tag__':
-                to_file = '{}.yml'.format(bundle_ref)
-                print("Copy to:", to_file)
-            self.extract_file_from_to(bundle_ref, 'bundle.yml',
-                                      destination=to_file,
-                                      overwrite=overwrite)
+        bundle_tags = found['bundles']
+        if len(bundle_tags) == 1:
+            bundle_tag = bundle_tags[0]
+            print("Found 1 tagged bundle '{}' for IAL tagged ancestor '{}'".format(bundle_tag, ancestor))
+            self.get_bundle(self, bundle_tag,
+                            to_file=to_file,
+                            overwrite=overwrite,
+                            verbose=False)
         else:
-            raise ValueError("Found multiple bundles for {}: {}".format(t, matching))
-        return IALBundle(to_file, ID=bundle_ref)
+            raise ValueError("Found multiple bundles for {}: {}".format(ancestor, bundle_tags))
+        return IALBundle(to_file, ID=bundle_tag)
+
+    def get_bundle(self, bundle_tag,
+                   to_file='__tag__',
+                   overwrite=False):
+        """
+        Get required bundle from IAL-bundle repository.
+
+        :param to_file: path/name in which to get the bundle file
+                        if '__tmp__', a unique random file is used
+                        if '__tag__, the file is ./<bundle_tag>.yml
+                        Can also be sys.stdout
+        :param overwrite: to allow overwriting of existing target file
+        """
+        if to_file == '__tmp__':
+            to_file = tempfile.mkstemp(suffix='.yml')[1]
+            print("Using temporary file for bundle:", to_file)
+        elif to_file == '__tag__':
+            to_file = '{}.yml'.format(bundle_tag)
+            print("Copy to:", to_file)
+        self.extract_file_from_to(bundle_tag, 'bundle.yml',
+                                  destination=to_file,
+                                  overwrite=overwrite)
 
 
 class TmpIALbundleRepo(IALbundleRepo):
@@ -119,7 +138,6 @@ class TmpIALbundleRepo(IALbundleRepo):
         super(TmpIALbundleRepo, self).__init__(os.path.join(in_dir, 'IAL-bundle'))
 
     def __del__(self):
-        print("Delete temporary repo: {}".format(self.repository))
         shutil.rmtree(self.repository)
 
 

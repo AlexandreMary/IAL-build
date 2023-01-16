@@ -12,9 +12,9 @@ import sys
 repo_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 sys.path.insert(0, os.path.join(repo_path, 'src'))
 
-from ial_build.algos import bundle2pack
+from ial_build.algos import bundle_tag2pack, bundle_file2pack
 from ial_build.pygmkpack import GmkpackTool
-from ial_build.config import DEFAULT_BUNDLE_CACHE_DIR
+from ial_build.config import DEFAULT_BUNDLE_CACHE_DIR, DEFAULT_IALBUNDLE_REPO
 
 
 if __name__ == '__main__':
@@ -26,7 +26,9 @@ if __name__ == '__main__':
                         help="If providing a bundle tag: URL of IAL-bundle repository to clone, " +
                              "in which to look for bundle tag. " +
                              "Can be local (e.g. ~user/IAL-bundle)" +
-                             "or distant (e.g. https://github.com/ACCORD-NWP/IAL-bundle.git).")
+                             "or distant (e.g. https://github.com/ACCORD-NWP/IAL-bundle.git)." +
+                             "Default: " + DEFAULT_IALBUNDLE_REPO,
+                        default=DEFAULT_IALBUNDLE_REPO)
     parser.add_argument('-l', '--compiler_label',
                         help='Compiler label. Through $GMKFILE, defaults to: "{}".'.format(
                             GmkpackTool.get_compiler_label()),

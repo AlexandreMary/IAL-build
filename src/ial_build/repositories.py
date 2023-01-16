@@ -12,6 +12,7 @@ import sys
 import io
 from contextlib import contextmanager
 import getpass
+import tempfile
 
 from .config import IAL_OFFICIAL_TAGS_re, IAL_BRANCHES_re
 
@@ -481,16 +482,20 @@ class GitProxy(object):
         """
         Extract **filepath** from **git_ref** to a **destination** file, potentially outside the repo.
 
+        :param destination: can be a filename or an open IO such as sys.stdout
         :param overwrite: to allow overwriting of existing target file
         """
         git_cmd = ['git', 'show', '{}:{}'.format(git_ref, filepath)]
         f = self._git_cmd(git_cmd, strip=False)
         if destination is None:
-            destination = tempfile.mkstemp()
-        if os.path.exists(destination) and not overwrite:
+            destination = tempfile.mkstemp()[1]
+        elif isinstance(destination, str) and os.path.exists(destination) and not overwrite:
             raise IOError("File '{}' already exists".format(destination))
-        with io.open(destination, 'w') as out:
-            out.writelines([l + '\n' for l in f])
+        if isinstance(destination, str):
+            with io.open(destination, 'w') as out:
+                out.writelines([l + '\n' for l in f])
+        else:
+            destination.writelines([l + '\n' for l in f])
         return destination
 
 

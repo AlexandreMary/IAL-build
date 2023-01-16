@@ -19,27 +19,30 @@ from ial_build.config import (DEFAULT_IAL_REPO,
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Get a copy of a bundle from IAL-bundle repository.')
-    parser.add_argument('git_ref',
-                        help='Git ref: branch or tag. WARNING: if none is provided, the currently checked out ref is taken.',
-                        nargs='?',
-                        default=None)
-    parser.add_argument('-r', '--repository',
-                        help='Location of the IAL Git repository (defaults to: {}).'.format(DEFAULT_IAL_REPO),
-                        default=DEFAULT_IAL_REPO)
+    parser.add_argument('bundle_tag',
+                        help='Bundle tag to be fetched.')
     parser.add_argument('-v', '--verbose',
                         action='store_true')
     parser.add_argument('-f', '--force_overwrite',
                         help="To allow overwriting of existing target file",
                         dest='overwrite',
                         action='store_true')
-    parser.add_argument('--IAL_bundle_origin_repo',
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument('-t', '--target_file',
+                        help="To write bundle in a specified target file.",
+                        dest='output',
+                        default="__tag__")
+    output.add_argument('-s', '--stdout',
+                        help="To write bundle to stdout.",
+                        action='store_const',
+                        dest='output',
+                        const=sys.stdout)
+    parser.add_argument('-o', '--IAL_bundle_origin_repo',
                         help="URL of the 'IAL-bundle' repository to clone. " +
                              "Default: " + DEFAULT_IALBUNDLE_REPO,
                         default=DEFAULT_IALBUNDLE_REPO)
     args = parser.parse_args()
     IALbundles = TmpIALbundleRepo(args.IAL_bundle_origin_repo, verbose=args.verbose)
-    IALbundles.get_bundle_for_IAL_git_ref(args.repository,
-                                          args.git_ref,
-                                          to_file='__tag__',
-                                          overwrite=args.overwrite
-                                          verbose=args.verbose)
+    IALbundles.get_bundle(args.bundle_tag,
+                          to_file=args.output,
+                          overwrite=args.overwrite)

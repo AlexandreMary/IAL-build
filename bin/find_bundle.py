@@ -36,17 +36,19 @@ if __name__ == '__main__':
                         help="To allow overwriting of existing target file (if --get_copy)",
                         dest='overwrite',
                         action='store_true')
-    parser.add_argument('--IAL_bundle_origin_repo',
+    parser.add_argument('-o', '--IAL_bundle_origin_repo',
                         help="URL of the 'IAL-bundle' repository to clone. " +
                              "Default: " + DEFAULT_IALBUNDLE_REPO,
                         default=DEFAULT_IALBUNDLE_REPO)
     args = parser.parse_args()
     IALbundles = TmpIALbundleRepo(args.IAL_bundle_origin_repo, verbose=args.verbose)
-    IALbundles.print_bundle_tags_for_IAL_git_ref(args.repository,
-                                                 args.git_ref,
-                                                 verbose=args.verbose)
     if args.get_copy:
         IALbundles.get_bundle_for_IAL_git_ref(args.repository,
                                               args.git_ref,
                                               to_file='__tag__',
                                               overwrite=args.overwrite)
+    else:
+        IALbundles.print_bundle_tags_for_IAL_git_ref(args.repository,
+                                                     args.git_ref,
+                                                     verbose=args.verbose)
+
