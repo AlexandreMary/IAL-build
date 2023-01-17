@@ -21,7 +21,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Make or populate a pack from a bundle.')
     parser.add_argument('bundle',
                         help="Two options and syntaxes: 'file:<path to bundle file>' if providing a bundle file, " +
-                             "or 'tag:<bundle tag>' if providing a tag in IAL-bundle repo")
+                             "or 'tag:<bundle tag>' if providing a tag in IAL-bundle repo "+
+                             "(without </> in both cases).")
     parser.add_argument('-r', '--bundle_origin_repo',
                         help="If providing a bundle tag: URL of IAL-bundle repository to clone, " +
                              "in which to look for bundle tag. " +
@@ -103,6 +104,8 @@ if __name__ == '__main__':
                                compiler_flag=args.compiler_flag,
                                homepack=args.homepack,
                                rootpack=args.rootpack)
+    else:
+        raise ValueError("'bundle' argument must start with 'tag:' or 'file:', cf. help (-h)")
     pack.ics_tune('', GMK_THREADS=int(args.threads_number))
     if args.programs != '':
         for p in GmkpackTool.parse_programs(args.programs):

@@ -371,27 +371,6 @@ class Pack(object):
             f.write("Hub populated from bundle '{}':\n".format(bundle.ID))
             bundle.dump(f)
 
-    def populate_hub(self, latest_main_release):
-        """
-        Populate hub packages in main pack.
-        WARNING: temporary solution before 'bundle' implementation !
-        """
-        from ial_build.config import GMKPACK_HUB_PACKAGES
-        from ial_build.util import host_name
-        msg = "Populating vendor packages in pack's hub:"
-        print(msg + "\n" + "-" * len(msg))
-        for package, properties in GMKPACK_HUB_PACKAGES.items():
-            rootdir = properties[host_name()]
-            version = properties.get(latest_main_release, properties['default_version'])
-            project = properties['project']
-            print("Package: '{}/{}' (v{}) from {}".format(project, package, version, rootdir))
-            pkg_src = os.path.join(rootdir, package, version)
-            pkg_dst = os.path.join(self._hub_local_src, project, package)
-            if os.path.exists(pkg_dst):
-                shutil.rmtree(pkg_dst)
-            shutil.copytree(pkg_src, pkg_dst, symlinks=True)
-        print("-" * len(msg))
-
     def write_view_info(self, view):
         """Write view.info into self.origin_filepath."""
         openmode = 'a' if os.path.exists(self.origin_filepath) else 'w'
@@ -492,14 +471,16 @@ class Pack(object):
                                                                      config['git'],
                                                                      repository))
             if not self.is_incremental or self.is_incremental and config.get('incremental_pack', True):
-                # main pack or incremental and package to be added in hub/local
-                print("Incremental hub packages is currently not available. " +
-                      "Packages are populated in bulk or not at all, " +
-                      "depending on bundle key 'incremental_pack' (default:True).")
+                # main pack or incremental and package to be added in hub/local in bulk
                 pkg_dst = os.path.join(self.abspath, pkg_dst, component)
                 if os.path.exists(pkg_dst):
                     shutil.rmtree(pkg_dst)
                 shutil.copytree(repository, pkg_dst, symlinks=True)
+                print(" ... package populated.")
+                if self.is_incremental:
+                    print("(Package populated in bulk : incremental hub packages is currently not available. " +
+                          "To deactivate package population in incremental packs, set bundle key: " +
+                          "incremental_pack = False (default:True).)")
             else:
                 # incremental pack and package ignored
                 print(" ... package ignored (bundle: incremental_pack = False).")
