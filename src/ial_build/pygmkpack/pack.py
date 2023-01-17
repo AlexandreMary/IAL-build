@@ -389,6 +389,8 @@ class Pack(object):
         :param subdir: if given, populate in src/local/{subdir}/
         :param filter_file: file in which to find list of files/dir to be filtered out
         """
+        # read filter a first time to list sub-projects to be ignored
+        filter_list = self.read_sources_filter_list(filter_file)
         if subdir is None:
             dst = self._local
         else:
@@ -401,7 +403,11 @@ class Pack(object):
                 continue
             f_src = os.path.join(repository, f)
             if os.path.isdir(f_src):  # actual subproject
-                print('  {}'.format(f))
+                if f in filter_list:
+                    print('  ({} : ignored subproject)'.format(f))
+                    continue
+                else:
+                    print('  {}'.format(f))
             subprocess.check_call(['rsync', '-avq', f_src, dst])
         # filter a posteriori
         to_be_filtered = self.prepare_sources_filter(filter_file, subdir=subdir)
@@ -585,31 +591,40 @@ class Pack(object):
 
     def filter_sources_a_posteriori(self, filter_list):
         """Remove sources files to be filtered from src/local/ (ensuring they are in src/local)."""
+        print("A posteriori filtering:")
         for f in filter_list:
             f = os.path.abspath(f)  # eliminate potential ../
             if not f.startswith(self._local):  # file is out of pack/src/local: ignore
                 print("! File '{}' is out of '{}': not removed".format(f, self._local))
                 continue
-            if os.path.isdir(f):
-                print("Removed tree: " + f)
-                shutil.rmtree(f)
-            else:
-                print("Removed file: " + f)
-                os.remove(f)
+            if os.path.exists(f):
+                if os.path.isdir(f):
+                    print("Removed tree: " + f)
+                    shutil.rmtree(f)
+                else:
+                    print("Removed file: " + f)
+                    os.remove(f)
+
+    def read_sources_filter_list(self, filter_file):
+        """
+        Read the list of sources to be filtered out.
+        """
+        if filter_file is None:
+            print("\nNo list of sources to be filtered out provided.")
+            filter_list = []
+        else:
+            print("\nList of sources to be filtered out read from file '{}'.".format(filter_file))
+            with io.open(filter_file, 'r') as ff:
+                filter_list = [f.strip() for f in ff.readlines()
+                               if (not f.strip().startswith('#') and f.strip() != '')]  # ignore commented and blank lines
+        return filter_list
 
     def prepare_sources_filter(self, filter_file, subdir=None):
         """
         Prepare a list of source files to be filtered out,
         list is read from file then expanded (wildcards, abs paths).
         """
-        if filter_file is None:
-            print("\nList of sources to be filtered out - None provided.")
-            filter_list = []
-        else:
-            print("\nList of sources to be filtered out (read from file '{}'):".format(filter_file))
-            with io.open(filter_file, 'r') as ff:
-                filter_list = [f.strip() for f in ff.readlines()
-                               if (not f.strip().startswith('#') and f.strip() != '')]  # ignore commented and blank lines
+        filter_list = self.read_sources_filter_list(filter_file)
         # make abs paths
         for i, f in enumerate(filter_list):
             if not os.path.isabs(f):
