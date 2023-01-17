@@ -511,7 +511,8 @@ class IALview(object):
                  new_branch=False,
                  start_ref=None,
                  register_in_GCOdb=False,
-                 fetch=False):
+                 fetch=False,
+                 restore_initial_checkout_eventually=True):
         """
         Hold **ref** from **repository**. If **ref** is None, takes the currently checked out ref.
 
@@ -523,7 +524,10 @@ class IALview(object):
         :param start_ref: start reference, in case a new branch to be created
         :param register_in_GCOdb: register branch in GCO database.
         :param fetch: to fetch branch on remote or not
+        :param restore_initial_checkout_eventually: when leaving (deleting the object), restore initially checkedout
+                                                    state
         """
+        self.restore_initial_checkout_eventually = restore_initial_checkout_eventually
         self.repository = os.path.abspath(repository)
         self.git_proxy = GitProxy(self.repository)
         if ref is None:
@@ -577,7 +581,8 @@ class IALview(object):
 
     def __del__(self):
         try:
-            if self.initial_checkedout not in (self.git_proxy.latest_commit, self.git_proxy.currently_checkedout):
+            if self.restore_initial_checkout_eventually and \
+               self.initial_checkedout not in (self.git_proxy.latest_commit, self.git_proxy.currently_checkedout):
                 # need to checkout back
                 if self.git_proxy.is_clean:
                     self.git_proxy.ref_checkout(self.initial_checkedout)
@@ -585,7 +590,7 @@ class IALview(object):
                     print("! Warning ! Working directory is not clean at time of quiting the branch. Reset or commit changes manually.")
                     print("(Unable to go back to previously checkedout state : {})".format(self.initial_checkedout))
         except Exception:
-            pass
+            print("Unable to go back to previously checkedout state : {}".format(self.initial_checkedout))
 
     def info(self, out=sys.stdout):
         """Write info about the view."""
@@ -607,9 +612,9 @@ class IALview(object):
         for line in info:
             out.write(line + '\n')
 
-    def new_branch_classical_nomenclature(self, branch_radical):
-        """Return a GCO-classically formatted branch name, based on current HEAD."""
-        return '{}_{}_{}'.format(getpass.getuser(), self.latest_main_release_ancestor, branch_radical)
+    def new_branch_classical_nomenclature(self, radical):
+        """Return a GCO-classically formatted branch name (<user>_<release>_<radical>), based on self.ref."""
+        return '{}_{}_{}'.format(getpass.getuser(), self.latest_main_release_ancestor, radical)
 
     @property
     def is_current_ref_IAL_conventional(self):
