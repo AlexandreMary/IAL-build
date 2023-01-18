@@ -28,7 +28,7 @@ Installation
   - module load IAL-build
 
 * at CNRM:
-  - install `ecbundle`, e.g. `pip3 install git+https://github.com/ecmwf/ecbundle`
+  - install `ecbundle`, e.g. `pip3 install --user git+https://github.com/ecmwf/ecbundle`
   - ```
     IAL_BUILD_PACKAGE=/home/common/epygram/public/IAL-build/default
     export PATH=$IAL_BUILD_PACKAGE/bin:$PATH
