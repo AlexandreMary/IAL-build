@@ -15,14 +15,12 @@ Installation
 ------------
 
 * in general:
-  - install `ecbundle`:
-    - cloning `pip3 install git+https://github.com/ecmwf/ecbundle`
-    - or `pip3 install git+https://github.com/ecmwf/ecbundle`
+  - install `ecbundle`, e.g. `pip3 install git+https://github.com/ecmwf/ecbundle`
   - Clone this repo, then add paths to the package:
-  ```
-  export PATH=<path to package>/bin:$PATH
-  export PYTHONPATH=<path to package>/src:$PYTHONPATH
-  ```
+    ```
+    export PATH=<path to package>/bin:$PATH
+    export PYTHONPATH=<path to package>/src:$PYTHONPATH
+    ```
 
 * on `belenos`:
 
@@ -30,9 +28,10 @@ Installation
   - module load IAL-build
 
 * at CNRM:
-  ```
-  IAL_BUILD_PACKAGE=/home/common/epygram/public/IAL-build/default
-  export PATH=$IAL_BUILD_PACKAGE/bin:$PATH
-  export PYTHONPATH=$IAL_BUILD_PACKAGE/src:$PYTHONPATH
-  ```
+  - install `ecbundle`, e.g. `pip3 install git+https://github.com/ecmwf/ecbundle`
+  - ```
+    IAL_BUILD_PACKAGE=/home/common/epygram/public/IAL-build/default
+    export PATH=$IAL_BUILD_PACKAGE/bin:$PATH
+    export PYTHONPATH=$IAL_BUILD_PACKAGE/src:$PYTHONPATH
+    ```
   
