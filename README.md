@@ -15,8 +15,10 @@ Installation
 ------------
 
 * in general:
-
-  Clone this repo, then add paths to the package:
+  - install `ecbundle`:
+    - cloning `pip3 install git+https://github.com/ecmwf/ecbundle`
+    - or `pip3 install git+https://github.com/ecmwf/ecbundle`
+  - Clone this repo, then add paths to the package:
   ```
   export PATH=<path to package>/bin:$PATH
   export PYTHONPATH=<path to package>/src:$PYTHONPATH
