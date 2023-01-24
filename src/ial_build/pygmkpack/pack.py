@@ -293,7 +293,6 @@ class Pack(object):
     def populate_from_IALview_as_main(self, view):
         """
         Populate main pack with contents from a IALview.
-        WARNING: temporary solution before 'bundle' implementation !
         """
         from ial_build.repositories import IALview
         assert isinstance(view, IALview)
@@ -309,7 +308,6 @@ class Pack(object):
     def populate_from_IALview_as_incremental(self, view, start_ref=None):
         """
         Populate as incremental pack with contents from a IALview.
-        WARNING: temporary solution before 'bundle' implementation !
 
         :param view: a IALview instance
         :param start_ref: increment of modification starts from this ref.

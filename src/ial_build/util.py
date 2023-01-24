@@ -15,7 +15,7 @@ import socket
 import subprocess
 import datetime
 
-from .config import GMKPACK_HUB_PACKAGES, hosts_re
+from .config import hosts_re
 
 
 def now(strftime_fmt="%Y%m%dT%H%M"):
