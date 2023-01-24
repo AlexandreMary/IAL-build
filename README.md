@@ -14,18 +14,13 @@ Dependancies
 Installation
 ------------
 
-* in general:
-  - install `ecbundle`, e.g. `pip3 install git+https://github.com/ecmwf/ecbundle`
-  - Clone this repo, then add paths to the package:
-    ```
-    export PATH=<path to package>/bin:$PATH
-    export PYTHONPATH=<path to package>/src:$PYTHONPATH
-    ```
-
 * on `belenos`:
 
-  - module use ~mary/public/modulefiles
-  - module load IAL-build
+  ```
+  module use ~mary/public/modulefiles
+  module load ecbundle
+  module load IAL-build
+  ```
 
 * at CNRM:
   - install `ecbundle`, e.g. `pip3 install --user git+https://github.com/ecmwf/ecbundle`
@@ -35,3 +30,10 @@ Installation
     export PYTHONPATH=$IAL_BUILD_PACKAGE/src:$PYTHONPATH
     ```
   
+* in general:
+  - install `ecbundle`, e.g. `pip3 install git+https://github.com/ecmwf/ecbundle`
+  - Clone this repo, then add paths to the package:
+    ```
+    export PATH=<path to package>/bin:$PATH
+    export PYTHONPATH=<path to package>/src:$PYTHONPATH
+    ```
