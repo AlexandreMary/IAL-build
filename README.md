@@ -10,6 +10,7 @@ Dependancies
 ------------
 
 * `ecbundle` : https://github.com/ecmwf/ecbundle
+* Some functionalities may also clone and use [IAL-bundle](https://github.com/ACCORD-NWP/IAL-bundle). If you don't have internet connection at time of use, you may have to specify a local, pre-cloned, origin repository for IAL-bundle, using env variable `DEFAULT_IALBUNDLE_REPO`, e.g. `DEFAULT_IALBUNDLE_REPO=~/repositories/IAL-bundle`
 
 Installation
 ------------
