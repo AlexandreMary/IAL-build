@@ -15,9 +15,7 @@ import shutil
 import glob
 from contextlib import contextmanager
 
-from bronx.stdtypes.date import now
-
-from ial_build.util import copy_files_in_cwd
+from ial_build.util import copy_files_in_cwd, now
 from . import PackError, COMPONENTS_MAP
 from . import GmkpackTool
 
@@ -736,13 +734,9 @@ class Pack(object):
                 if not os.path.exists(logdir):
                     os.makedirs(logdir)
                 if program == '':
-                    outname = os.path.join(logdir,
-                                           '.'.join(['_',
-                                                     now().stdvortex]))
+                    outname = os.path.join(logdir, '.'.join(['_', now()]))
                 else:
-                    outname = os.path.join(logdir,
-                                           '.'.join([program.lower(),
-                                                     now().stdvortex]))
+                    outname = os.path.join(logdir, '.'.join([program.lower(), now()]))
                 with io.open(outname, 'w') as f:
                     ok = subprocess.check_call(cmd, stdout=f, stderr=f)
             else:
@@ -801,7 +795,7 @@ class Pack(object):
     def local2tar(self, tar_filename=None):
         """Extract the contents of the pack to a tarfile."""
         if tar_filename is None:
-            tar_filename = os.path.join(self.abspath, now().stdvortex + '.tar')
+            tar_filename = os.path.join(self.abspath, now() + '.tar')
         files = self.scanpack()
         with tarfile.open(tar_filename, 'w') as t:
             with self._cd_local():

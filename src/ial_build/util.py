@@ -13,8 +13,13 @@ import os
 import shutil
 import socket
 import subprocess
+import datetime
 
 from .config import GMKPACK_HUB_PACKAGES, hosts_re
+
+
+def now(strftime_fmt="%Y%m%dT%H%M"):
+    return datetime.datetime.now().strftime(strftime_fmt)
 
 
 def host_name():
