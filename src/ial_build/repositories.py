@@ -477,17 +477,18 @@ class GitProxy(object):
         return len(status) == 0
 
     def extract_file_from_to(self, git_ref, filepath,
-                             destination=None,
+                             destination='__tmp__',
                              overwrite=False):
         """
         Extract **filepath** from **git_ref** to a **destination** file, potentially outside the repo.
 
         :param destination: can be a filename or an open IO such as sys.stdout
+                            if '__tmp__' a temporary file is used, and returned
         :param overwrite: to allow overwriting of existing target file
         """
         git_cmd = ['git', 'show', '{}:{}'.format(git_ref, filepath)]
         f = self._git_cmd(git_cmd, strip=False)
-        if destination is None:
+        if destination == '__tmp__':
             destination = tempfile.mkstemp()[1]
         elif isinstance(destination, str) and os.path.exists(destination) and not overwrite:
             raise IOError("File '{}' already exists".format(destination))

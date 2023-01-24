@@ -87,10 +87,9 @@ class IALbundleRepo(GitProxy):
         if len(bundle_tags) == 1:
             bundle_tag = bundle_tags[0]
             print("Found 1 tagged bundle '{}' for IAL tagged ancestor '{}'".format(bundle_tag, ancestor))
-            self.get_bundle(self, bundle_tag,
-                            to_file=to_file,
-                            overwrite=overwrite,
-                            verbose=False)
+            to_file = self.get_bundle(bundle_tag,
+                                      to_file=to_file,
+                                      overwrite=overwrite)
         else:
             raise ValueError("Found multiple bundles for {}: {}".format(ancestor, bundle_tags))
         return IALBundle(to_file, ID=bundle_tag)
@@ -110,12 +109,13 @@ class IALbundleRepo(GitProxy):
         if to_file == '__tmp__':
             to_file = tempfile.mkstemp(suffix='.yml')[1]
             print("Using temporary file for bundle:", to_file)
+            overwrite = True
         elif to_file == '__tag__':
             to_file = '{}.yml'.format(bundle_tag)
             print("Copy to:", to_file)
-        self.extract_file_from_to(bundle_tag, 'bundle.yml',
-                                  destination=to_file,
-                                  overwrite=overwrite)
+        return self.extract_file_from_to(bundle_tag, 'bundle.yml',
+                                         destination=to_file,
+                                         overwrite=overwrite)
 
 
 class TmpIALbundleRepo(IALbundleRepo):
