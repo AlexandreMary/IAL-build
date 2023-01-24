@@ -38,3 +38,9 @@ Installation
     export PATH=<path to package>/bin:$PATH
     export PYTHONPATH=<path to package>/src:$PYTHONPATH
     ```
+
+Tools
+-----
+
+In the `bin/` directory, the `ial-*` commands can help finding bundles, create IAL branches and make packs (gmkpack) from bundles or IAL branches.
+They are auto-documented, see their argument `-h`.
