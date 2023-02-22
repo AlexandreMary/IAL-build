@@ -21,6 +21,7 @@ from .config import DEFAULT_IAL_REPO, DEFAULT_BUNDLE_CACHE_DIR
 def IALgitref2pack(IAL_git_ref,
                    IAL_repo_path,
                    IAL_bundle_origin_repo=None,
+                   IAL_bundle_tag_for_hub=None,
                    bundle_cache_dir=None,
                    bundle_update=True,
                    pack_type='incr',
@@ -38,6 +39,7 @@ def IALgitref2pack(IAL_git_ref,
     :param IAL_bundle_origin_repo: URL of IAL-bundle repository to clone, in which to look for bundle tag.
                                    Can be local (e.g. ~user/IAL-bundle)
                                    or distant (e.g. https://github.com/ACCORD-NWP/IAL-bundle.git).
+    :param IAL_bundle_tag_for_hub: tag of a bundle to be used for the hub (guessed if not provided).
     :param bundle_cache_dir: cache directory in which to download/update repositories for the hub
     :param bundle_update: if bundle repositories are to be updated/checkedout
     :param pack_type: type of pack, among ('incr', 'main')
@@ -79,9 +81,12 @@ def IALgitref2pack(IAL_git_ref,
         # hub
         print("Populate pack hub using bundle...")
         IALbundles = TmpIALbundleRepo(IAL_bundle_origin_repo, verbose=True)
-        hub_bundle = IALbundles.get_bundle_for_IAL_git_ref(IAL_repo_path,
-                                                           IAL_git_ref=IAL_git_ref)
-        print("bundle ID :", hub_bundle.ID)
+        if IAL_bundle_tag_for_hub is not None:
+            hub_bundle = IALbundles.get_bundle(IAL_bundle_tag_for_hub, to_file='__tmp__')
+        else:
+            hub_bundle = IALbundles.get_bundle_for_IAL_git_ref(IAL_repo_path,
+                                                               IAL_git_ref=IAL_git_ref)
+            print("bundle ID :", hub_bundle.ID)
         hub_bundle.download(cache_dir=bundle_cache_dir,
                             update=bundle_update)
         pack.populate_hub_from_bundle(hub_bundle)

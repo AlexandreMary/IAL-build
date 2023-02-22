@@ -64,6 +64,9 @@ if __name__ == '__main__':
                              "that contains bundle for populating hub packages in a main pack. " +
                              "Default: " + DEFAULT_IALBUNDLE_REPO,
                         default=DEFAULT_IALBUNDLE_REPO)
+    parser.add_argument('--hub_bundle_tag', '--hbt',
+                        help='Main packs only: tag of a bundle to be used for the hub (guessed if not provided).',
+                        default=None)
     parser.add_argument('--hub_bundle_cache_dir', '--hbcd',
                         help="Main packs only: path to the directory in which to find/download bundled hub packages. " +
                              "Default: " + DEFAULT_BUNDLE_CACHE_DIR,
@@ -78,6 +81,7 @@ if __name__ == '__main__':
     pack = IALgitref2pack(args.git_ref,
                           args.repository,
                           IAL_bundle_origin_repo=args.hub_bundle_origin_repo,
+                          IAL_bundle_tag_for_hub=args.hub_bundle_tag,
                           bundle_cache_dir=args.hub_bundle_cache_dir,
                           bundle_update=args.hub_bundle_update,
                           pack_type=args.packtype,
