@@ -87,12 +87,11 @@ class IALbundleRepo(GitProxy):
         if len(bundle_tags) == 1:
             bundle_tag = bundle_tags[0]
             print("Found 1 tagged bundle '{}' for IAL tagged ancestor '{}'".format(bundle_tag, ancestor))
-            to_file = self.get_bundle(bundle_tag,
-                                      to_file=to_file,
-                                      overwrite=overwrite)
+            return self.get_bundle(bundle_tag,
+                                   to_file=to_file,
+                                   overwrite=overwrite)
         else:
             raise ValueError("Found multiple bundles for {}: {}".format(ancestor, bundle_tags))
-        return IALBundle(to_file, ID=bundle_tag)
 
     def get_bundle(self, bundle_tag,
                    to_file='__tag__',
@@ -113,9 +112,10 @@ class IALbundleRepo(GitProxy):
         elif to_file == '__tag__':
             to_file = '{}.yml'.format(bundle_tag)
             print("Copy to:", to_file)
-        return self.extract_file_from_to(bundle_tag, 'bundle.yml',
-                                         destination=to_file,
-                                         overwrite=overwrite)
+        to_file = self.extract_file_from_to(bundle_tag, 'bundle.yml',
+                                            destination=to_file,
+                                            overwrite=overwrite)
+        return IALBundle(to_file, ID=bundle_tag)
 
 
 class TmpIALbundleRepo(IALbundleRepo):
