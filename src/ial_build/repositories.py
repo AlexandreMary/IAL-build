@@ -25,6 +25,7 @@ class GitProxy(object):
 
     re_author_in_commit = re.compile('Author: (?P<name>.+) <(?P<email>.+@.+)>$')
     re_detached_HEAD = re.compile('^\* \(HEAD detached at (?P<ref>.+)\)$')
+    re_oneline_decorated_commit = re.compile('^(?P<commit>[0-9a-f]+) \((?P<deco>.+?)\) (?P<msg>.+)$')
 
     def __init__(self, repository='.'):
         self.repository = os.path.abspath(repository)
@@ -266,19 +267,20 @@ class GitProxy(object):
         return commit
 
     def tags_between(self, start_ref=None, end_ref='HEAD'):
-        """Get the list of tags between 2 references (commits, branches, tags)."""
+        """Get the list of tags between 2 references (commits, branches, tags) in chronological order."""
         if start_ref is None and end_ref:
             refs = end_ref
         else:
             refs = '{}...{}'.format(start_ref, end_ref)
         git_cmd = ['git', 'log', refs,
-                   '--decorate', '--simplify-by-decoration']
-        _re = re.compile('commit .+ \((.+)\)$')
+                   '--decorate', '--oneline']
         cmd_out = self._git_cmd(git_cmd)
-        list_of_tagged_commits = [line for line in cmd_out if _re.match(line)]
-        list_of_tags = [_re.match(line).group(1).split(', ') for line in list_of_tagged_commits]
-        list_of_tags = [[ref[4:].strip() for ref in line if ref.startswith('tag:')]
-                        for line in list_of_tags]
+        # filter
+        list_of_commits = [self.re_oneline_decorated_commit.match(line) for line in cmd_out]
+        list_of_tagged_decos = [m.group('deco') for m in list_of_commits
+                                if m is not None and 'tag:' in m.group('deco')]
+        list_of_tags = [[d.strip()[5:] for d in decos.split(',') if d.strip().startswith('tag:')]
+                        for decos in list_of_tagged_decos]
         return list_of_tags[::-1]
 
     def tags_history(self, ref='HEAD'):
@@ -505,6 +507,8 @@ class IALview(object):
     _re_official_tags = IAL_OFFICIAL_TAGS_re
     _re_branches = IAL_BRANCHES_re
 
+    first_tag = 'CY38'  # CY38 is the first one under Git
+
     def __init__(self, repository,
                  ref=None,
                  need_for_checkout=True,
@@ -682,7 +686,7 @@ class IALview(object):
     def official_tagged_ancestors(self):
         """All official tagged ancestors."""
         official_tags = []
-        for tags in self.git_proxy.tags_between('CY38', self.ref):  # CY38 is the first one under Git
+        for tags in self.git_proxy.tags_between(self.first_tag, self.ref):
             for tag in tags[::-1]:  # The latest is a priori the first one
                 if self._re_official_tags.match(tag):
                     official_tags.append(tag)
@@ -691,7 +695,7 @@ class IALview(object):
     @property
     def latest_tagged_ancestor(self):
         """Latest tagged ancestor."""
-        tags = self.git_proxy.tags_between('CY38', self.ref)[-1]  # CY38 is the first one under Git
+        tags = self.git_proxy.tags_between(self.first_tag, self.ref)[-1]
         return tags[0]
 
     @property
