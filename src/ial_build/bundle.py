@@ -12,6 +12,7 @@ import tempfile
 import subprocess
 import re
 import shutil
+import sys
 
 from .pygmkpack import Pack, GmkpackTool
 from .config import DEFAULT_BUNDLE_CACHE_DIR, DEFAULT_IALBUNDLE_REPO
@@ -115,7 +116,8 @@ class IALbundleRepo(GitProxy):
         to_file = self.extract_file_from_to(bundle_tag, 'bundle.yml',
                                             destination=to_file,
                                             overwrite=overwrite)
-        return IALBundle(to_file, ID=bundle_tag)
+        if to_file != sys.stdout:
+            return IALBundle(to_file, ID=bundle_tag)
 
 
 class TmpIALbundleRepo(IALbundleRepo):
