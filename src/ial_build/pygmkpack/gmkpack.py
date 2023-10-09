@@ -85,10 +85,9 @@ class GmkpackTool(object):
         """Scan a 'rootpacks' directory, looking for official releases packs."""
         rootpacks = {}
         for p in os.listdir(directory):
-            if not os.path.islink(os.path.join(directory, p)):
-                m = cls.OFFICIAL_PACKS_re.match(p)
-                if m:
-                    rootpacks[p] = m.groupdict()
+            m = cls.OFFICIAL_PACKS_re.match(p)
+            if m:
+                rootpacks[p] = m.groupdict()
         return rootpacks
 
     @classmethod
