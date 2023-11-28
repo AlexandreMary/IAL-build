@@ -146,6 +146,7 @@ class Pack(object):
     def ics_tune(self, program,
                  GMK_THREADS=32,
                  Ofrt=None,
+                 optvcc=None,
                  partition=None,
                  no_compilation=False,
                  no_libs_update=False):
@@ -170,6 +171,11 @@ class Pack(object):
             self._ics_modify(program,
                              re.compile(pattern),
                              pattern.replace('(\d)', str(Ofrt)))
+        if optvcc is not None:
+            pattern = 'optvcc=(.*)'
+            self._ics_modify(program,
+                             re.compile(pattern),
+                             pattern.replace('(.*)', str(optvcc)))
         # modify partition
         if partition is not None:
             pattern = '\#SBATCH -p (.+)'
