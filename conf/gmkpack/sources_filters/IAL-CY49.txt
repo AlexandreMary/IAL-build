@@ -1,5 +1,5 @@
 # SUB-PROJECTS
-.git
+#.git
 .github
 .ported
 atlas_apps

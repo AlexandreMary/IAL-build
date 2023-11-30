@@ -13,8 +13,18 @@ import io
 from contextlib import contextmanager
 import getpass
 import tempfile
+import shutil
 
 from .config import IAL_OFFICIAL_TAGS_re, IAL_BRANCHES_re
+
+
+def git_clone(repository,
+              destination,
+              remove_if_preexisting=False):
+    """Wrapper to `git clone <repository> <destination>`"""
+    if os.path.exists(destination) and remove_if_preexisting:
+        shutil.rmtree(destination)
+    subprocess.check_call(['git', 'clone', repository, destination])
 
 
 class GitError(Exception):

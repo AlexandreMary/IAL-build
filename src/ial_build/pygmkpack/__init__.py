@@ -21,8 +21,8 @@ COMPONENTS_MAP = {'eckit':'hub/local/src/ecSDK',
                   'atlas':'hub/local/src',
                   # src/local
                   'ial':'src/local',
-                  'oops':'src/local/oops_src',
-                  #'surfex':'src/local/surfex',
+                  'oops_src':'src/local',
+                  #'surfex':'src/local',
                   # mpa, falfi, ...
                   }
 
