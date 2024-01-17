@@ -87,7 +87,7 @@ def IALgitref2pack(IAL_git_ref,
             hub_bundle = IALbundles.get_bundle_for_IAL_git_ref(IAL_repo_path,
                                                                IAL_git_ref=IAL_git_ref)
             print("bundle ID :", hub_bundle.ID)
-        hub_bundle.download(cache_dir=bundle_cache_dir,
+        hub_bundle.download(src_dir=bundle_cache_dir,
                             update=bundle_update)
         pack.populate_hub_from_bundle(hub_bundle)
         # src/local/
@@ -99,7 +99,7 @@ def IALgitref2pack(IAL_git_ref,
 
 
 def bundle_file2pack(bundle_file,
-                     cache_dir=None,
+                     src_dir=None,
                      update=True,
                      # pack arguments
                      pack_type='incr',
@@ -114,7 +114,7 @@ def bundle_file2pack(bundle_file,
 
     :param bundle_file: path of a bundle file
     --- bundle download
-    :param cache_dir: cache directory in which to download/update repositories
+    :param src_dir: directory in which to download/update repositories
     :param update: if repositories are to be updated/checkedout
     --- pack
     :param pack_type: type of pack, among ('incr', 'main')
@@ -126,7 +126,7 @@ def bundle_file2pack(bundle_file,
     :param rootpack: diretory in which to look for root pack (incr packs only)
     """
     b = IALBundle(bundle_file)
-    b.download(cache_dir=cache_dir,
+    b.download(src_dir=src_dir,
                update=update)
     if not preexisting_pack:
         pack = b.gmkpack_create_pack(pack_type,

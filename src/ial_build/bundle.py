@@ -145,9 +145,10 @@ class TmpIALbundleRepo(IALbundleRepo):
 
 class IALBundle(object):
 
-    def __init__(self, bundle_file, ID=None):
+    def __init__(self, bundle_file, ID=None, src_dir=None):
         """
         :param bundle: bundle file (yaml)
+        :param src_dir: directory where to find sources of the projects
         """
         from ecbundle.bundle import Bundle
         self.bundle_file = bundle_file
@@ -161,11 +162,30 @@ class IALBundle(object):
             for name, conf in project.items():
                 self.projects[name] = dict(conf)
         self.downloaded = None  # none = unknown
-        #self.src_dir = DEFAULT_BUNDLE_CACHE_DIR  # FIXME: this does not work in Davai context for some reason
-        self.src_dir = None
+        self.src_dir = src_dir
+
+    def shift_origins(self):
+        """Shift 'origin' remote of projects, if necessary."""
+        self._origins = {}
+        for p, conf in self.projects.items():
+            if os.path.exists(self.local_project_repo(p)):
+                r = GitProxy(self.local_project_repo(p))
+                origin = r.remotes['origin']
+                if origin != conf['git']:
+                    tmp = uuid.uuid4()
+                    self._origins[p] = tmp
+                    r.remote_rename('origin', tmp)
+                    r.remote_add('origin', conf['git'])
+
+    def shift_origins_back(self):
+        """Shift 'origin' remote of projects back to initial, if necessary."""
+        for p, tmp_remote in self._origins.items():
+            r = GitProxy(self.local_project_repo(p))
+            r.remote_rm('origin')
+            r.remote_rename(tmp, 'origin')
 
     def download(self,
-                 cache_dir=None,
+                 src_dir=None,
                  update=True,
                  threads=1,
                  no_colour=True,
@@ -173,7 +193,7 @@ class IALBundle(object):
         """
         Download repositories and (optionnally) checkout according versions.
 
-        :param cache_dir: cache directory in which to download/update repositories
+        :param src_dir: directory in which to download/update repositories of projects
         :param update: if repositories are to be updated/checkedout
         :param threads: number of threads to do parallel downloads
         :param no_colour: Disable color output
@@ -182,19 +202,27 @@ class IALBundle(object):
         from ecbundle.logging import logger
         logger.setLevel(logging.DEBUG)
         from ecbundle import BundleDownloader
-        if cache_dir is None:
-            #cache_dir = self.src_dir  # FIXME: this does not work in Davai context for some reason
-            cache_dir = os.getcwd()
+        # (re)define src_dir
+        if src_dir is None and self.src_dir is None:
+            src_dir = os.getcwd()
+        elif src_dir is not None:
+            if self.src_dir is not None:
+                print("IALBundle: src_dir overwritten by download to '{}'".format(src_dir))
+            self.src_dir = src_dir
         # downloads
-        b = BundleDownloader(bundle=self.bundle_file,
-                             src_dir=cache_dir,
-                             update=update,
-                             threads=threads,
-                             no_colour=no_colour,
-                             dryrun=dryrun,
-                             dry_run=dryrun,
-                             shallow=False,
-                             forced_update=update)
+        self.shift_origins()
+        try:
+            b = BundleDownloader(bundle=self.bundle_file,
+                                 src_dir=self.src_dir,
+                                 update=update,
+                                 threads=threads,
+                                 no_colour=no_colour,
+                                 dryrun=dryrun,
+                                 dry_run=dryrun,
+                                 shallow=False,
+                                 forced_update=update)
+        finally:
+            self.shift_origins_back()
         if b.download() != 0:
             raise RuntimeError("Downloading repositories failed.")
         self.downloaded = True

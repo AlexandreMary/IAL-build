@@ -511,6 +511,23 @@ class GitProxy(object):
             destination.writelines([l + '\n' for l in f])
         return destination
 
+    # Remotes ------------------------------------------------------------------
+
+    @property
+    def remotes(self):
+        cmd = ['git', 'remote', '-v']
+        remotes = [l.split()[:2] for l in self._git_cmd(cmd)]
+        return {l[0]:l[1] for l in remotes]
+
+    def remote_add(self, name, url):
+        self._git_cmd(['git', 'remote', 'add', name, url])
+
+    def remote_rename(self, source, target):
+        self._git_cmd(['git', 'remote', 'rename', source, target])
+
+    def remote_rm(self, remote):
+        self._git_cmd(['git', 'remote', 'rm', remote])
+
 
 class IALview(object):
     """Utilities around IAL repository."""
