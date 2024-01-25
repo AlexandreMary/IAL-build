@@ -82,7 +82,7 @@ if __name__ == '__main__':
 
     if args.bundle.startswith('file:'):
         pack = bundle_file2pack(args.bundle[5:],
-                                cache_dir=args.cache_directory,
+                                src_dir=args.cache_directory,
                                 update=args.update,
                                 pack_type=args.pack_type,
                                 preexisting_pack=args.preexisting_pack,
@@ -95,7 +95,7 @@ if __name__ == '__main__':
         # bundle is provided as a tag
         pack = bundle_tag2pack(args.bundle[4:],
                                IAL_bundle_origin_repo=args.bundle_origin_repo,
-                               cache_dir=args.cache_directory,
+                               src_dir=args.cache_directory,
                                update=args.update,
                                pack_type=args.pack_type,
                                preexisting_pack=args.preexisting_pack,

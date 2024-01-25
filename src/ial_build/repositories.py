@@ -517,7 +517,7 @@ class GitProxy(object):
     def remotes(self):
         cmd = ['git', 'remote', '-v']
         remotes = [l.split()[:2] for l in self._git_cmd(cmd)]
-        return {l[0]:l[1] for l in remotes]
+        return {l[0]:l[1] for l in remotes}
 
     def remote_add(self, name, url):
         self._git_cmd(['git', 'remote', 'add', name, url])

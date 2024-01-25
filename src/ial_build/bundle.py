@@ -13,6 +13,7 @@ import subprocess
 import re
 import shutil
 import sys
+import uuid
 
 from .pygmkpack import Pack, GmkpackTool
 from .config import DEFAULT_BUNDLE_CACHE_DIR, DEFAULT_IALBUNDLE_REPO
@@ -164,25 +165,43 @@ class IALBundle(object):
         self.downloaded = None  # none = unknown
         self.src_dir = src_dir
 
-    def shift_origins(self):
-        """Shift 'origin' remote of projects, if necessary."""
-        self._origins = {}
+    def switch_remotes(self):
+        """
+        Switch remotes (temporarily) of repositories to other names,
+        so as to comply with required remotes from bundle.
+        """
+        self._to_rename = {}
         for p, conf in self.projects.items():
             if os.path.exists(self.local_project_repo(p)):
                 r = GitProxy(self.local_project_repo(p))
-                origin = r.remotes['origin']
-                if origin != conf['git']:
-                    tmp = uuid.uuid4()
-                    self._origins[p] = tmp
-                    r.remote_rename('origin', tmp)
-                    r.remote_add('origin', conf['git'])
+                req_remote_url = os.path.expanduser(os.path.expandvars(conf['git']))
+                req_remote = conf.get('remote', 'origin')
+                if req_remote in r.remotes.keys() and req_remote_url != r.remotes[req_remote]:
+                    # temporarily rename existing remote
+                    tmp = str(uuid.uuid4())
+                    self._to_rename[p] = [{'initial':req_remote, 'tmp':tmp}]
+                    r.remote_rename(req_remote, tmp)
+                    # look for an existing remote matching with required one
+                    matching = False
+                    for remote, remote_url in r.remotes.items():
+                        matching = (remote_url == req_remote_url)
+                        if matching:
+                            # temporarily rename this one as req_remote
+                            self._to_rename[p].append({'initial':remote,'tmp':req_remote})
+                            r.remote_rename(remote, req_remote)
+                            break
+                    # no matching remote found: add
+                    if not matching:
+                        r.remote_add(req_remote, req_remote_url)
+                        self._to_rename[p].append({'initial':str(uuid.uuid4()), 'tmp':req_remote})
+                    print("am: switched:", r.remotes)
 
-    def shift_origins_back(self):
-        """Shift 'origin' remote of projects back to initial, if necessary."""
-        for p, tmp_remote in self._origins.items():
+    def switch_remotes_back(self):
+        """Switch back remote to their initial values. To be called after switch_remotes() only !"""
+        for p, list_of_remotes in self._to_rename.items():
             r = GitProxy(self.local_project_repo(p))
-            r.remote_rm('origin')
-            r.remote_rename(tmp, 'origin')
+            for remote in list_of_remotes[::-1]:
+                r.remote_rename(remote['tmp'], remote['initial'])
 
     def download(self,
                  src_dir=None,
@@ -209,8 +228,8 @@ class IALBundle(object):
             if self.src_dir is not None:
                 print("IALBundle: src_dir overwritten by download to '{}'".format(src_dir))
             self.src_dir = src_dir
+        self.switch_remotes()
         # downloads
-        self.shift_origins()
         try:
             b = BundleDownloader(bundle=self.bundle_file,
                                  src_dir=self.src_dir,
@@ -221,10 +240,10 @@ class IALBundle(object):
                                  dry_run=dryrun,
                                  shallow=False,
                                  forced_update=update)
+            if b.download() != 0:
+                raise RuntimeError("Downloading repositories failed.")
         finally:
-            self.shift_origins_back()
-        if b.download() != 0:
-            raise RuntimeError("Downloading repositories failed.")
+            self.switch_remotes_back()
         self.downloaded = True
         self.src_dir = b.src_dir()
 
