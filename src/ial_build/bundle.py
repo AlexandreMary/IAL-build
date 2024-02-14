@@ -223,7 +223,7 @@ class IALBundle(object):
         from ecbundle import BundleDownloader
         # (re)define src_dir
         if src_dir is None and self.src_dir is None:
-            src_dir = os.getcwd()
+            self.src_dir = os.getcwd()
         elif src_dir is not None:
             if self.src_dir is not None:
                 print("IALBundle: src_dir overwritten by download to '{}'".format(src_dir))
