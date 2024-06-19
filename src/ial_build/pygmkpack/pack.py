@@ -176,7 +176,7 @@ class Pack(object):
             pattern = 'optvcc=(.*)'
             self._ics_modify(program,
                              re.compile(pattern),
-                             pattern.replace('(.*)', str(optvcc)))
+                             pattern.replace('(.*)', '"{}"'.format(str(optvcc))))
         # modify partition
         if partition is not None:
             pattern = '\#SBATCH -p (.+)'
