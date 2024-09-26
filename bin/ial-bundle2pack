@@ -20,9 +20,8 @@ from ial_build.config import DEFAULT_BUNDLE_CACHE_DIR, DEFAULT_IALBUNDLE_REPO
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Make or populate a pack from a bundle.')
     parser.add_argument('bundle',
-                        help="Two options and syntaxes: 'file:<path to bundle file>' if providing a bundle file, " +
-                             "or 'tag:<bundle tag>' if providing a tag in IAL-bundle repo "+
-                             "(without </> in both cases).")
+                        help="Either a local path to a bundle file, or a tag in IAL-bundle repo. " +
+                             "Takes the local file if the path exists, otherwise look for it as a tag.")
     parser.add_argument('-r', '--bundle_origin_repo',
                         help="If providing a bundle tag: URL of IAL-bundle repository to clone, " +
                              "in which to look for bundle tag. " +
@@ -80,8 +79,8 @@ if __name__ == '__main__':
                         default=GmkpackTool.get_rootpack())
     args = parser.parse_args()
 
-    if args.bundle.startswith('file:'):
-        pack = bundle_file2pack(args.bundle[5:],
+    if os.path.exists(args.bundle):
+        pack = bundle_file2pack(args.bundle,
                                 src_dir=args.cache_directory,
                                 update=args.update,
                                 pack_type=args.pack_type,
@@ -91,9 +90,10 @@ if __name__ == '__main__':
                                 compiler_flag=args.compiler_flag,
                                 homepack=args.homepack,
                                 rootpack=args.rootpack)
-    elif args.bundle.startswith('tag:'):
+    else:
+        print("'{}' is not an existing local file, look for it as a tag in IAL-bundle repo.")
         # bundle is provided as a tag
-        pack = bundle_tag2pack(args.bundle[4:],
+        pack = bundle_tag2pack(args.bundle,
                                IAL_bundle_origin_repo=args.bundle_origin_repo,
                                src_dir=args.cache_directory,
                                update=args.update,
@@ -104,8 +104,6 @@ if __name__ == '__main__':
                                compiler_flag=args.compiler_flag,
                                homepack=args.homepack,
                                rootpack=args.rootpack)
-    else:
-        raise ValueError("'bundle' argument must start with 'tag:' or 'file:', cf. help (-h)")
     pack.ics_tune('', GMK_THREADS=int(args.threads_number))
     if args.programs != '':
         for p in GmkpackTool.parse_programs(args.programs):
