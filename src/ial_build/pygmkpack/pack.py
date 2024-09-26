@@ -26,6 +26,9 @@ __all__ = []
 
 class Pack(object):
 
+    _filter_file_in_repo_re     = '__in_repo:(?P<file>.*)__'
+    _filter_file_in_repo_format = '__in_repo:{}__'
+
     def __init__(self, packname, preexisting=True, homepack=None):
         """
         Create Pack object from the **packname**.
@@ -526,9 +529,15 @@ class Pack(object):
                             shutil.move(os.path.join(pkg_dst, a), os.path.join(pkg_parentdir, a))
                         os.rmdir(pkg_dst)
                     # filter a posteriori
+                    # if filter_file is specified in bundle: special syntax
+                    in_repo = re.match(self._filter_file_in_repo_re, filter_file)
+                    if in_repo:
+                        filter_file = os.path.join(pkg_parentdir, in_repo.group('file'))
                     to_be_filtered = self.prepare_sources_filter(filter_file, subdir=subdir)
                     self.filter_sources_a_posteriori(to_be_filtered)
                 else:
+                    # DEPRECATED:
+                    print("DEPRECATED: as_a_git_clone=False")
                     if self.is_incremental:
                         print("  ! Could not find initial version of component '{}'".format(component),
                               "in root pack --> populated in bulk")
@@ -572,7 +581,12 @@ class Pack(object):
         msg = "Populating components in pack's src/local:"
         print("\n" + msg + "\n" + "=" * len(msg))
         for component, config in gmkpack_components.items():
-            filter_file = self._configfile_for_sources_filtering(component, tags_history[component])
+            if 'gmkpack_filter_file' in config:
+                # filter file is specified in the bundle - and the file is in the repo
+                filter_file = self._filter_file_in_repo_format.format(config['gmkpack_filter_file'])
+            else:
+                # otherwise, taken from IAL-build (old way)
+                filter_file = self._configfile_for_sources_filtering(component, tags_history[component])
             self.bundle_populate_component(component,
                                            bundle,
                                            filter_file=filter_file)
