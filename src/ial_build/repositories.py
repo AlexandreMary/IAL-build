@@ -542,7 +542,6 @@ class IALview(object):
                  remote='origin',
                  new_branch=False,
                  start_ref=None,
-                 register_in_GCOdb=False,
                  fetch=False,
                  restore_initial_checkout_eventually=True):
         """
@@ -554,7 +553,6 @@ class IALview(object):
         :param remote: fetch ref from a remote
         :param new_branch: if the **ref** is a new branch to be created
         :param start_ref: start reference, in case a new branch to be created
-        :param register_in_GCOdb: register branch in GCO database.
         :param fetch: to fetch branch on remote or not
         :param restore_initial_checkout_eventually: when leaving (deleting the object), restore initially checkedout
                                                     state
@@ -596,9 +594,6 @@ class IALview(object):
             if new_branch:
                 assert start_ref is not None
                 self.git_proxy.checkout_new_branch(ref, start_ref)
-                if register_in_GCOdb:
-                    start_commit = self.git_proxy.tag_points_to(start_ref)
-                    self.GCOdb_register(start_commit)
             else:
                 if self.git_proxy.ref_is_branch(ref) and ref in self.git_proxy.detached_branches():
                     #raise NotImplementedError("Checking out detached branch")
@@ -685,19 +680,6 @@ class IALview(object):
             raise SyntaxError(" ".join(["Cannot recognize parts in git ref,",
                                         "which syntax must look like one of",
                                         "mary_CY47T1_dev (branch), CY47T1_r1.04 (tag), CY47T1 (tag)"]))
-
-    def GCOdb_register(self, start_commit=None):  # TODO: delete
-        """
-        DEPRECATED !
-        Register branch in GCO database (proxy to 'git_branch -q -a').
-        """
-        cmd = ['git_branch', '-q', '-a']
-        if start_commit is not None:
-            cmd.append(start_commit)
-        else:
-            start_commit = '?'
-        print("Register branch: '{}' in GCO database, with base commit: '{}'".format(self.git_proxy.current_branch, start_commit))
-        subprocess.check_call(cmd, cwd=self.git_proxy.repository)
 
     # History ------------------------------------------------------------------
 

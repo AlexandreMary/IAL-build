@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, absolute_import, unicode_literals, division
 """
-Make or populate a pack from Git.
+Preview merge conflicts.
 """
 import os
 import argparse
