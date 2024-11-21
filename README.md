@@ -3,8 +3,9 @@ IAL-build
 
 *Tools for Source Code Management and build of IAL code.*
 
-This packages wraps around IAL git repo management, bundling (ecbundle package) and build systems
+This package wraps around IAL git repo management, bundling (ecbundle package) and build systems
 (for now gmkpack only) to help transitioning from source code to IAL binary executables.
+It provides a python package to do so, as well as a set of command-line tools.
 
 Dependancies
 ------------
@@ -44,3 +45,24 @@ Tools
 
 In the `bin/` directory, the `ial-*` commands can help finding bundles, create IAL branches and make packs (gmkpack) from bundles or IAL branches.
 They are auto-documented, see their argument `-h`.
+
+Some examples:
+
+### Prepare a bundle for a personal branch
+
+* Find a bundle appropriate for my IAL branch <my_branch>, based on CY50:
+  `% ial-find_bundle my_branch`
+  `BDL50-default`
+
+
+* Get this bundle:
+  `% ial-get_bundle BDL50-default [-t my_bundle.yml]`
+
+* Edit and replace `CY50` in `my_bundle.yml`
+
+* Create a root pack from my bundle:
+  `% ial-bundle2pack my_bundle.yml [...pack creation arguments, cf. -h]`
+
+### Install a rootpack for the recommended (default) bundle for CY50
+
+...
