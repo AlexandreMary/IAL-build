@@ -7,7 +7,7 @@ This package wraps around IAL git repo management, bundling (ecbundle package) a
 (for now gmkpack only) to help transitioning from source code to IAL binary executables.
 It provides a python package to do so, as well as a set of command-line tools.
 
-Dependancies
+Dependencies
 ------------
 
 * `ecbundle` : https://github.com/ecmwf/ecbundle
@@ -40,6 +40,14 @@ Installation
     export PYTHONPATH=<path to package>/src:$PYTHONPATH
     ```
 
+Documentation
+-------------
+
+(tbc) 
+
+* cache dir
+* gmkpack specificities (src/local, hub, ...)
+
 Tools
 -----
 
@@ -51,18 +59,45 @@ Some examples:
 ### Prepare a bundle for a personal branch
 
 * Find a bundle appropriate for my IAL branch <my_branch>, based on CY50:
-  `% ial-find_bundle my_branch`
-  `BDL50-default`
-
+  ```
+  % ial-find_bundle my_branch
+  BDL50-default
+  ```
 
 * Get this bundle:
-  `% ial-get_bundle BDL50-default [-t my_bundle.yml]`
+  ```
+  % ial-get_bundle BDL50-default [-t my_bundle.yml]
+  ```
 
 * Edit and replace `CY50` in `my_bundle.yml`
 
 * Create a root pack from my bundle:
-  `% ial-bundle2pack my_bundle.yml [...pack creation arguments, cf. -h]`
+  ```
+  % ial-bundle2pack my_bundle.yml [...pack creation arguments, cf. -h]
+  ```
 
-### Install a rootpack for the recommended (default) bundle for CY50
+### Install a root pack of `BDL50-default`
 
-...
+```
+ial-bundle2pack BDL50-default
+```
+will:
+* look for a bundle tagged `BDL50-default` in the [IAL-bundle](https://github.com/ACCORD-NWP/IAL-bundle) repository,
+* download it
+* clone/fetch/checkout each package referenced in the bundle in the requested version, in a cache local directory (cf. option `-d`)
+* create a pack (by default: main)
+* populate the pack with the source codes checkedout for each package
+
+### Install a root(=main) pack for the recommended (default) bundle for CY50
+
+```
+ial-git2pack -t main CY50 [...]
+```
+will:
+* find a bundle appropriate for CY50 in IAL-bundle repository
+* then do the same as `ial-bundle2pack`
+
+### Install an incremental pack with the content of my IAL branch on top of its most recent official ancestor pack
+```
+ial-git2pack my_branch
+```
