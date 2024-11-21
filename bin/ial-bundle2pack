@@ -31,8 +31,8 @@ if __name__ == '__main__':
                         default=DEFAULT_IALBUNDLE_REPO)
     parser.add_argument('-l', '--compiler_label',
                         help='Compiler label. Through $GMKFILE, defaults to: "{}".'.format(
-                            GmkpackTool.get_compiler_label()),
-                        default=GmkpackTool.get_compiler_label())
+                            GmkpackTool.get_compiler_label(fatal=False)),
+                        default=GmkpackTool.get_compiler_label(fatal=False))
     parser.add_argument('-o', '--compiler_flag',
                         help='Compiler flag. Defaults to $GMK_OPT: "{}".'.format(
                             GmkpackTool.get_compiler_flag()),
