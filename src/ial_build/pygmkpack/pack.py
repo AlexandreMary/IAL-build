@@ -40,6 +40,7 @@ class Pack(object):
         self.abspath = os.path.join(self.homepack, packname)
         self._local = os.path.join(self.abspath, 'src', 'local')
         self._hub_local_src = os.path.join(self.abspath, 'hub', 'local', 'src')
+        self._hub_gmkview_file = os.path.join(self.abspath, 'hub', '.gmkview')
         self._bin = os.path.join(self.abspath, 'bin')
         if not preexisting and os.path.exists(self.abspath):
             raise PackError("Pack already exists, while *preexisting* is False ({}).".format(self.abspath))
@@ -498,6 +499,10 @@ class Pack(object):
                     print("(Package populated in bulk : incremental hub packages is currently not available. " +
                           "To deactivate package population in incremental packs, set bundle key: " +
                           "incremental_pack = False (default:True).)")
+                    # edit hub/.gmkview to account priorily for local packages
+                    os.remove(self._hub_gmkview_file)
+                    with open(self._hub_gmkview_file, 'w') as hgf:
+                        hgf.writelines(['local\n', 'main'])
             else:
                 # incremental pack and package ignored
                 print(" ... package ignored (bundle: incremental_pack = False).")
