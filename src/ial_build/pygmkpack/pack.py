@@ -3,9 +3,7 @@
 """
 Python handling of a pack.
 """
-from __future__ import print_function, absolute_import, unicode_literals, division
 
-import six
 import os
 import re
 import subprocess
@@ -166,27 +164,27 @@ class Pack(object):
         """
         # modify number of threads
         if GMK_THREADS is not None:
-            pattern = 'export GMK_THREADS=(\d+)'
+            pattern = r'export GMK_THREADS=(\d+)'
             self._ics_modify(program,
                              re.compile(pattern),
-                             pattern.replace('(\d+)', str(GMK_THREADS)))
+                             pattern.replace(r'(\d+)', str(GMK_THREADS)))
         # modify optimization level
         if Ofrt is not None:
-            pattern = 'Ofrt=(\d)'
+            pattern = r'Ofrt=(\d)'
             self._ics_modify(program,
                              re.compile(pattern),
-                             pattern.replace('(\d)', str(Ofrt)))
+                             pattern.replace(r'(\d)', Ofrt))
         if optvcc is not None:
             pattern = 'optvcc=(.*)'
             self._ics_modify(program,
                              re.compile(pattern),
-                             pattern.replace('(.*)', '"{}"'.format(str(optvcc))))
+                             pattern.replace('(.*)', '"{}"'.format(optvcc)))
         # modify partition
         if partition is not None:
-            pattern = '\#SBATCH -p (.+)'
+            pattern = r'\#SBATCH -p (.+)'
             self._ics_modify(program,
                              re.compile(pattern),
-                             pattern.replace('(.+)', partition).replace('\#', '#'))
+                             pattern.replace('(.+)', partition).replace(r'\#', '#'))
         # switch off compilation
         if no_compilation:
             pattern = 'export ICS_ICFMODE=(.+)'
@@ -211,7 +209,7 @@ class Pack(object):
             or a filename of a file containing the list of filenames
         """
 
-        if isinstance(list_of_files, six.string_types):  # filename of a file containing list of files to ignore
+        if isinstance(list_of_files, str):  # filename of a file containing list of files to ignore
             pattern = 'end_of_ignored_files'
             self._ics_insert(program, pattern,
                              ['cat {} >> $GMKWRKDIR/.ignored_files'.format(list_of_files)],
@@ -748,7 +746,7 @@ class Pack(object):
 
     def write_ignored_sources(self, list_of_files):
         """Write sources to be ignored in a dedicated file."""
-        if isinstance(list_of_files, six.string_types):  # already a file containing filenames: copy
+        if isinstance(list_of_files, str):  # already a file containing filenames: copy
             shutil.copyfile(list_of_files, self._ignored_sources_filepath)
         else:
             with io.open(self._ignored_sources_filepath, 'w') as f:  # a python list

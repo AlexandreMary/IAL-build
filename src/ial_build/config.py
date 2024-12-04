@@ -11,15 +11,15 @@ Configuration parameters.
 import os
 import re
 
-IAL_OFFICIAL_TAGS_re = re.compile('CY(?P<release>\d{2}([TRH]\d)?)' +
-                                  '(_(?P<radical>.+)\.(?P<version>\d{2}))?$')
-IAL_OFFICIAL_PACKS_re = re.compile('(?P<prefix>((cy)|(CY))?)(?P<release>\d{2}([TRHtrh]\d)?)' + '_' +
-                                   '(?P<radical>.+)\.(?P<version>\d{2})' + '\.' +
-                                   '(?P<compiler_label>\w+)\.(?P<compiler_flag>\w+)' +
-                                   '(?P<suffix>(\.pack)?)$')
-IAL_BRANCHES_re = re.compile('_'.join(['(?P<user>\w+)',
-                                       'CY(?P<release>\d{2}([TRH]\d)?)',
-                                       '(?P<radical>.+)$']))
+IAL_OFFICIAL_TAGS_re = re.compile(r'CY(?P<release>\d{2}([TRH]\d)?)' +
+                                  r'(_(?P<radical>.+)\.(?P<version>\d{2}))?$')
+IAL_OFFICIAL_PACKS_re = re.compile(r'(?P<prefix>((cy)|(CY))?)(?P<release>\d{2}([TRHtrh]\d)?)' + '_' +
+                                   r'(?P<radical>.+)\.(?P<version>\d{2})' + r'\.' +
+                                   r'(?P<compiler_label>\w+)\.(?P<compiler_flag>\w+)' +
+                                   r'(?P<suffix>(\.pack)?)$')
+IAL_BRANCHES_re = re.compile(r'_'.join([r'(?P<user>\w+)',
+                                        r'CY(?P<release>\d{2}([TRH]\d)?)',
+                                        r'(?P<radical>.+)$']))
 IAL_DOC_OUTPUT_DIR = os.path.join(os.environ['HOME'], 'tmp','prep_doc')
 
 DEFAULT_BUNDLE_CACHE_DIR = os.path.join(os.environ['HOME'], 'bundles')
@@ -38,7 +38,7 @@ DEFAULT_PACK_COMPILER_FLAG = os.environ.get('GMK_OPT', 'x')
 
 # hosts recognition
 hosts_re = {
-    'belenos':re.compile('^belenos(login)?\d+\.belenoshpc\.meteo\.fr$'),
-    'taranis':re.compile('^taranis(login)?\d+\.taranishpc\.meteo\.fr$'),
-    'lxcnrm':re.compile('^[pls]x[a-z]+\d{1,2}$')
+    'belenos':re.compile(r'^belenos(login)?\d+\.belenoshpc\.meteo\.fr$'),
+    'taranis':re.compile(r'^taranis(login)?\d+\.taranishpc\.meteo\.fr$'),
+    'lxcnrm':re.compile(r'^[pls]x[a-z]+\d{1,2}$')
     }

@@ -3,9 +3,7 @@
 """
 Python wrapping of *gmkpack* tool.
 """
-from __future__ import print_function, absolute_import, unicode_literals, division
 
-import six
 import os
 import re
 import subprocess
@@ -24,7 +22,7 @@ class GmkpackTool(object):
     _default_branch_radical = 'main'
     _default_version_number = '00'
     _default_compiler_flag = DEFAULT_PACK_COMPILER_FLAG
-    _OPTIONSPACK_re = re.compile('GMKFILE=(?P<gmkfile>.+)\s+<= -l (?P<label>\w+)\s+-o (?P<flag>\w+)$')
+    _OPTIONSPACK_re = re.compile(r'GMKFILE=(?P<gmkfile>.+)\s+<= -l (?P<label>\w+)\s+-o (?P<flag>\w+)$')
     OFFICIAL_PACKS_re = IAL_OFFICIAL_PACKS_re
 
     @staticmethod
@@ -43,7 +41,7 @@ class GmkpackTool(object):
 
     @staticmethod
     def parse_programs(programs):
-        if isinstance(programs, six.string_types):
+        if isinstance(programs, str):
             if programs == '__usual__':
                 programs = USUAL_BINARIES
             else:

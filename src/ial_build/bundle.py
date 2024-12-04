@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from __future__ import print_function, absolute_import, unicode_literals, division
 """
 Utility to deal with bundles in sight of their build.
 """
-import six
 import json
 import os
 import io

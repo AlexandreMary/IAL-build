@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from __future__ import print_function, absolute_import, unicode_literals, division
 """
 Management of repositories.
 """
-import six
 import subprocess
 import os
 import re
@@ -33,9 +31,9 @@ class GitError(Exception):
 
 class GitProxy(object):
 
-    re_author_in_commit = re.compile('Author: (?P<name>.+) <(?P<email>.+@.+)>$')
-    re_detached_HEAD = re.compile('^\* \(HEAD detached at (?P<ref>.+)\)$')
-    re_oneline_decorated_commit = re.compile('^(?P<commit>[0-9a-f]+) \((?P<deco>.+?)\) (?P<msg>.+)$')
+    re_author_in_commit = re.compile(r'Author: (?P<name>.+) <(?P<email>.+@.+)>$')
+    re_detached_HEAD = re.compile(r'^\* \(HEAD detached at (?P<ref>.+)\)$')
+    re_oneline_decorated_commit = re.compile(r'^(?P<commit>[0-9a-f]+) \((?P<deco>.+?)\) (?P<msg>.+)$')
 
     def __init__(self, repository='.'):
         self.repository = os.path.abspath(repository)
@@ -467,7 +465,7 @@ class GitProxy(object):
 
         :param filenames: either a filename or a list of
         """
-        if isinstance(filenames, six.string_types):
+        if isinstance(filenames, str):
             filenames = [filenames,]
         for f in filenames:
             git_cmd = ['git', 'add', f]
@@ -811,7 +809,7 @@ class IALview(object):
         for i, line in enumerate(template):
             template[i] = line
         # Repro/impact
-        repro_symbol = {True:'$\checkmark$', False:'$\\neq$'}
+        repro_symbol = {True:r'$\checkmark$', False:'$\\neq$'}
         repro_word = {True:'YES', False:'NO'}
         if metadata['numerical_impact'] in ('', 'None', 'False', None, False):
             numerical_impact = ''
@@ -826,9 +824,9 @@ class IALview(object):
                 template[i] = template[i].replace(key, replacement)
 
         for i, line in enumerate(template):
-            replace_in_line(i, '__branch_protected_underscores__', self.ref.replace('_', '\_').replace('%', '\%'))  # FIXME:
+            replace_in_line(i, '__branch_protected_underscores__', self.ref.replace('_', r'\_').replace('%', r'\%'))  # FIXME:
             replace_in_line(i, '__branch__', self.ref.replace('%', '_'))  # FIXME:
-            replace_in_line(i, '__start_ref__', start_ref_to_print.replace('_', '\_'))
+            replace_in_line(i, '__start_ref__', start_ref_to_print.replace('_', r'\_'))
             replace_in_line(i, '__repro_symbol__', repro_symbol[repro])
             replace_in_line(i, '__repro_word__', repro_word[repro])
             replace_in_line(i, '__numerical_impact__', numerical_impact)

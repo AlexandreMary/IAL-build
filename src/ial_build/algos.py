@@ -4,7 +4,6 @@ from __future__ import print_function, absolute_import, unicode_literals, divisi
 """
 Building executables algorithms.
 """
-import six
 import json
 import os
 import copy
@@ -202,7 +201,7 @@ def pack_build_executables(pack,
     """Build pack executables."""
     os.environ['GMK_RELEASE_CASE_SENSITIVE'] = '1'
     # preprocess args
-    if isinstance(pack, six.string_types):
+    if isinstance(pack, str):
         pack = Pack(pack, preexisting=True, homepack=homepack)
     elif not isinstance(pack, Pack):
         raise PackError("**pack** argument must be a pack name or a Pack instance")
