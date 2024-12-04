@@ -1,0 +1,35 @@
+[project]
+name = "ial_build"
+dynamic = ["version"]
+description = "IAL-build: Tools for Source Code Management and build of IAL code."
+readme = "README.md"
+requires-python = ">=3.7"
+keywords = []
+license = {text = "CECILL-C"}
+authors = [
+    { name = "Alexandre Mary"  , email = "alexandre.mary@meteo.fr"}
+    ]
+dependencies = [
+      #"ecbundle@git+https://github.com/ecmwf/ecbundle#egg=2.1.1",
+      ]
+
+[project.urls]
+source = "https://github.com/ACCORD-NWP/IAL-build.git"
+tracker = "https://github.com/ACCORD-NWP/IAL-build/issues"
+
+[project.scripts]
+davai-build = "davai.cli.build:main"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-dir]
+ial_build = "src/ial_build"
+
+[tool.setuptools.package-data]
+ial_build = ["conf/*.ini"]
+
+[tool.setuptools.dynamic]
+version = {attr = "ial_build.__version__"}
+
